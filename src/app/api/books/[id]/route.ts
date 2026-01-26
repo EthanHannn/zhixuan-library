@@ -1,0 +1,37 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const bookId = parseInt(params.id);
+
+    const book = await prisma.book.findUnique({
+      where: { id: bookId },
+      include: {
+        submittedBy: {
+          select: {
+            username: true
+          }
+        },
+        _count: {
+          select: {
+            comments: true,
+            votes: true
+          }
+        }
+      }
+    });
+
+    if (!book) {
+      return NextResponse.json({ error: "书籍不存在" }, { status: 404 });
+    }
+
+    return NextResponse.json({ book });
+  } catch (error) {
+    console.error("获取书籍详情失败:", error);
+    return NextResponse.json({ error: "获取书籍详情失败" }, { status: 500 });
+  }
+}

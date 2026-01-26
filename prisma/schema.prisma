@@ -1,0 +1,105 @@
+// This is your Prisma schema file
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  password      String    // 哈希后的密码
+  role          String    @default("USER")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  votes         Vote[]
+  comments      Comment[]
+  submittedBooks Book[]   @relation("SubmittedBy")
+  
+  @@map("users")
+}
+
+// 书籍表
+model Book {
+  id            Int       @id @default(autoincrement())
+  title         String
+  author        String
+  tag1          String
+  tag2          String
+  size          String
+  intro         String
+  popularity    Int       @default(0)
+  totalScore    Int       @default(0)
+  score         Float     @default(0)
+  status        String    @default("PENDING")
+  
+  // 投票统计
+  xiancaoCount  Int       @default(0)
+  liangcaoCount Int       @default(0)
+  gancaoCount   Int       @default(0)
+  kucaoCount    Int       @default(0)
+  ducaoCount    Int       @default(0)
+  
+  submittedById String?
+  submittedBy   User?     @relation("SubmittedBy", fields: [submittedById], references: [id])
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  votes         Vote[]
+  comments      Comment[]
+  
+  @@index([createdAt])
+  @@index([score])
+  @@index([xiancaoCount])
+  @@map("books")
+}
+
+// 投票表
+model Vote {
+  id        String    @id @default(cuid())
+  type      String
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId    Int
+  book      Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  
+  @@unique([userId, bookId])  // 每个用户对每本书只能投一次票
+  @@index([bookId])
+  @@map("votes")
+}
+
+
+
+// 评论表
+model Comment {
+  id          String    @id @default(cuid())
+  content     String
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId      Int
+  book        Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  parentId    String?   // 父评论ID(用于回复)
+  parent      Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     Comment[] @relation("CommentReplies")
+  
+  likeCount   Int       @default(0)
+  dislikeCount Int      @default(0)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([bookId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("comments")
+}
