@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const registerSchema = z.object({
-  email: z.string().email("邮箱格式不正确"),
   username: z.string().min(2, "用户名至少2个字符").max(20, "用户名最多20个字符"),
   password: z.string().min(6, "密码至少6个字符")
 });
@@ -12,16 +11,7 @@ const registerSchema = z.object({
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, username, password } = registerSchema.parse(body);
-
-    // 检查邮箱是否已存在
-    const existingEmail = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (existingEmail) {
-      return NextResponse.json({ error: "邮箱已被注册" }, { status: 400 });
-    }
+    const { username, password } = registerSchema.parse(body);
 
     // 检查用户名是否已存在
     const existingUsername = await prisma.user.findUnique({
@@ -38,7 +28,6 @@ export async function POST(req: NextRequest) {
     // 创建用户
     const user = await prisma.user.create({
       data: {
-        email,
         username,
         password: hashedPassword
       }
@@ -48,7 +37,6 @@ export async function POST(req: NextRequest) {
       message: "注册成功",
       user: {
         id: user.id,
-        email: user.email,
         username: user.username
       }
     });

@@ -7,7 +7,6 @@ import Link from "next/link";
 export default function RegisterPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
-    email: "",
     username: "",
     password: "",
     confirmPassword: ""
@@ -45,7 +44,6 @@ export default function RegisterPage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email: formData.email,
           username: formData.username,
           password: formData.password
         })
@@ -81,21 +79,6 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              邮箱
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
-              placeholder="请输入邮箱"
-            />
-          </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               用户名

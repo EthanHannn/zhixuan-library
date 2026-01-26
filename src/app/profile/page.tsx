@@ -93,7 +93,6 @@ export default function ProfilePage() {
               <h1 className="text-2xl font-bold text-[#1a1a1a] dark:text-[#E8E4D9]">
                 {(session.user as any)?.username}
               </h1>
-              <p className="text-gray-600 dark:text-gray-400">{session.user?.email}</p>
               <p className="text-sm text-gray-500 mt-1">
                 已投票 {votes.length} 本书
               </p>
