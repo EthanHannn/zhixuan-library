@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 
 interface Book {
@@ -71,6 +71,12 @@ export default function Home() {
                   >
                     个人中心
                   </Link>
+                  <button
+                    onClick={() => signOut()}
+                    className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                  >
+                    登出
+                  </button>
                 </>
               ) : (
                 <>

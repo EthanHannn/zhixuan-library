@@ -3,10 +3,15 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const bookId = parseInt(params.id);
+    const { id } = await params;
+    const bookId = parseInt(id);
+
+    if (isNaN(bookId)) {
+      return NextResponse.json({ error: "无效的书籍ID" }, { status: 400 });
+    }
 
     const book = await prisma.book.findUnique({
       where: { id: bookId },
