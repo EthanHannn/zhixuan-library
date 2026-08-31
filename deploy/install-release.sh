@@ -10,9 +10,9 @@ required=(
   "zhixuan-covers.tar.gz"
   "zhixuan-novels-score-7.5-plus.tar.gz"
   "zhixuan-artifacts.sha256"
-  "zhixuan-compose.production.yml"
-  "zhixuan-env.production"
-  "zhixuan-nginx-library.conf"
+  "compose.production.yml"
+  ".env.production"
+  "nginx-library.conf"
 )
 
 for name in "${required[@]}"; do
@@ -26,8 +26,8 @@ cd "${STAGING_DIR}"
 sha256sum --check zhixuan-artifacts.sha256
 
 install -d -m 0755 "${APP_DIR}" "${APP_DIR}/data" "${APP_DIR}/novels" "${APP_DIR}/covers"
-install -m 0644 "${STAGING_DIR}/zhixuan-compose.production.yml" "${APP_DIR}/compose.production.yml"
-install -m 0600 "${STAGING_DIR}/zhixuan-env.production" "${APP_DIR}/.env.production"
+install -m 0644 "${STAGING_DIR}/compose.production.yml" "${APP_DIR}/compose.production.yml"
+install -m 0600 "${STAGING_DIR}/.env.production" "${APP_DIR}/.env.production"
 
 if [[ ! -f "${APP_DIR}/data/library.db" ]]; then
   install -m 0660 "${STAGING_DIR}/zhixuan-library.db" "${APP_DIR}/data/library.db"
@@ -46,7 +46,7 @@ docker load --input "${STAGING_DIR}/zhixuan-library-image.tar"
 docker compose --project-directory "${APP_DIR}" -f "${APP_DIR}/compose.production.yml" up -d
 
 if [[ ! -f "/etc/nginx/sites-available/library.aivideoart.cn" ]]; then
-  install -m 0644 "${STAGING_DIR}/zhixuan-nginx-library.conf" "/etc/nginx/sites-available/library.aivideoart.cn"
+  install -m 0644 "${STAGING_DIR}/nginx-library.conf" "/etc/nginx/sites-available/library.aivideoart.cn"
   ln -s "/etc/nginx/sites-available/library.aivideoart.cn" "/etc/nginx/sites-enabled/library.aivideoart.cn"
 fi
 nginx -t
@@ -62,10 +62,10 @@ for attempt in {1..20}; do
       "${STAGING_DIR}/zhixuan-covers.tar.gz" \
       "${STAGING_DIR}/zhixuan-novels-score-7.5-plus.tar.gz" \
       "${STAGING_DIR}/zhixuan-artifacts.sha256" \
-      "${STAGING_DIR}/zhixuan-compose.production.yml" \
-      "${STAGING_DIR}/zhixuan-env.production" \
-      "${STAGING_DIR}/zhixuan-nginx-library.conf" \
-      "${STAGING_DIR}/zhixuan-install-release.sh"
+      "${STAGING_DIR}/compose.production.yml" \
+      "${STAGING_DIR}/.env.production" \
+      "${STAGING_DIR}/nginx-library.conf" \
+      "${STAGING_DIR}/install-release.sh"
     exit 0
   fi
   sleep 3
