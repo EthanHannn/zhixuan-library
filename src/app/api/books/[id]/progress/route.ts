@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { MIN_BOOK_SCORE } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
 
 // 获取阅读进度（需登录）
@@ -47,13 +48,17 @@ export async function POST(
       return NextResponse.json({ error: "无效的书籍ID" }, { status: 400 });
     }
     const body = await req.json();
-    const chapterIdx = Math.max(1, parseInt(body.chapterIdx) || 1);
     const percent = Math.min(1, Math.max(0, parseFloat(body.percent) || 0));
 
-    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    const book = await prisma.book.findFirst({
+      where: { id: bookId, status: "APPROVED", hasContent: true, score: { gte: MIN_BOOK_SCORE } },
+      select: { chapterCount: true },
+    });
     if (!book) {
-      return NextResponse.json({ error: "书籍不存在" }, { status: 404 });
+      return NextResponse.json({ error: "书籍不存在或暂无正文" }, { status: 404 });
     }
+    const requestedChapterIdx = Math.max(1, parseInt(body.chapterIdx) || 1);
+    const chapterIdx = Math.min(requestedChapterIdx, Math.max(1, book.chapterCount));
 
     const userId = session.user.id;
     const progress = await prisma.readingProgress.upsert({

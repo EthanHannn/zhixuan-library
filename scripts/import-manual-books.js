@@ -82,6 +82,11 @@ function indexChapters(buffer) {
   }));
 }
 
+function countTextCharacters(buffer, encoding) {
+  const text = new TextDecoder(encoding).decode(buffer);
+  return text.length - (text.match(/\s/g)?.length || 0);
+}
+
 function resolveNovelPath(novelRoot, relativePath) {
   if (!relativePath || path.isAbsolute(relativePath)) {
     throw new Error(`filePath 必须是相对路径：${relativePath || "(空)"}`);
@@ -127,7 +132,8 @@ async function main() {
     const fullPath = resolveNovelPath(novelRoot, book.filePath);
     const buffer = fs.readFileSync(fullPath);
     const chapters = indexChapters(buffer);
-    return { book, chapters, bytes: buffer.length, encoding: detectEncoding(buffer) };
+    const encoding = detectEncoding(buffer);
+    return { book, chapters, bytes: buffer.length, encoding, wordCount: countTextCharacters(buffer, encoding) };
   });
 
   for (const item of prepared) {
@@ -140,7 +146,7 @@ async function main() {
 
   const results = await prisma.$transaction(async (tx) => {
     const imported = [];
-    for (const { book, chapters } of prepared) {
+    for (const { book, chapters, wordCount } of prepared) {
       const existing = await tx.book.findMany({
         where: { title: book.title, author: book.author },
         select: { id: true },
@@ -163,6 +169,7 @@ async function main() {
         postId: Number.isInteger(book.postId) ? book.postId : null,
         filePath: book.filePath.replace(/\\/g, "/"),
         chapterCount: chapters.length,
+        wordCount,
         hasContent: true,
         coverPath: book.coverPath || null,
         coverSource: book.coverSource || null,

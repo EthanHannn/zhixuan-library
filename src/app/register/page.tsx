@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { SiteHeader } from "@/components/SiteHeader";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -68,21 +69,25 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F2F2EB] dark:bg-[#1C1C1E] flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-8 shadow-lg">
-        <h1 className="text-2xl font-bold text-center text-[#1a1a1a] dark:text-[#E8E4D9] mb-6">
+    <div className="min-h-screen bg-[#f5f1e8] text-[#292722]">
+      <SiteHeader />
+      <main className="mx-auto flex max-w-7xl justify-center px-4 py-12 sm:px-6">
+      <div className="w-full max-w-md rounded-[1.75rem] border border-[#d9cfbf] bg-[#fffdf8] p-7 shadow-[0_22px_60px_rgba(55,45,35,0.08)] sm:p-9">
+        <p className="text-center text-xs font-semibold tracking-[0.25em] text-[#9b4b35]">MEMBER ACCESS</p>
+        <h1 className="mb-2 mt-3 text-center font-serif text-3xl font-bold text-[#263e35]">
           创建书库成员
         </h1>
+        <p className="mb-7 text-center text-sm font-medium leading-6 text-[#6d665c]">为熟人创建登录账号，阅读记录、书架和评价会彼此独立。</p>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-sm">
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="mb-2 block text-sm font-bold text-[#4d4841]">
               昵称
             </label>
             <input
@@ -92,13 +97,13 @@ export default function RegisterPage() {
               onChange={handleChange}
               required
               maxLength={30}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
+              className="w-full rounded-xl border border-[#d4c9b8] bg-white px-4 py-3 text-[#34312c] outline-none focus:border-[#315f50] focus:ring-4 focus:ring-[#315f50]/10"
               placeholder="成员在书库中显示的名字"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="mb-2 block text-sm font-bold text-[#4d4841]">
               用户名
             </label>
             <input
@@ -109,13 +114,13 @@ export default function RegisterPage() {
               required
               minLength={2}
               maxLength={20}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
+              className="w-full rounded-xl border border-[#d4c9b8] bg-white px-4 py-3 text-[#34312c] outline-none focus:border-[#315f50] focus:ring-4 focus:ring-[#315f50]/10"
               placeholder="2-20个字符"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="mb-2 block text-sm font-bold text-[#4d4841]">
               密码
             </label>
             <input
@@ -125,13 +130,13 @@ export default function RegisterPage() {
               onChange={handleChange}
               required
               minLength={8}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
+              className="w-full rounded-xl border border-[#d4c9b8] bg-white px-4 py-3 text-[#34312c] outline-none focus:border-[#315f50] focus:ring-4 focus:ring-[#315f50]/10"
               placeholder="至少8个字符"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="mb-2 block text-sm font-bold text-[#4d4841]">
               确认密码
             </label>
             <input
@@ -140,7 +145,7 @@ export default function RegisterPage() {
               value={formData.confirmPassword}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
+              className="w-full rounded-xl border border-[#d4c9b8] bg-white px-4 py-3 text-[#34312c] outline-none focus:border-[#315f50] focus:ring-4 focus:ring-[#315f50]/10"
               placeholder="再次输入密码"
             />
           </div>
@@ -148,18 +153,19 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 bg-[#2F5D50] text-white rounded hover:bg-[#3d7766] transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-xl bg-[#315f50] py-3 font-semibold text-white transition hover:bg-[#284e42] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "创建中..." : "创建成员"}
           </button>
         </form>
 
-        <p className="mt-4 text-center">
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-            ← 返回书库
+        <p className="mt-5 text-center">
+          <Link href="/profile" className="text-sm font-semibold text-[#6d665c] hover:text-[#9b4b35]">
+            ← 返回个人中心
           </Link>
         </p>
       </div>
+      </main>
     </div>
   );
 }

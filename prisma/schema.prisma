@@ -13,66 +13,70 @@ datasource db {
 
 // 用户表
 model User {
-  id            String    @id @default(cuid())
-  username      String    @unique
-  nickname      String?
-  password      String    // 哈希后的密码
-  role          String    @default("USER")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  votes         Vote[]
-  comments      Comment[]
-  submittedBooks Book[]   @relation("SubmittedBy")
-  progress      ReadingProgress[]
-  
+  id        String   @id @default(cuid())
+  username  String   @unique
+  nickname  String?
+  password  String // 哈希后的密码
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  votes          Vote[]
+  comments       Comment[]
+  submittedBooks Book[]            @relation("SubmittedBy")
+  progress       ReadingProgress[]
+  bookshelf      BookshelfEntry[]
+
   @@map("users")
 }
 
 // 书籍表
 model Book {
-  id            Int       @id @default(autoincrement())
-  title         String
-  author        String
-  tag1          String
-  tag2          String
-  size          String
-  intro         String
-  popularity    Int       @default(0)
-  totalScore    Int       @default(0)
-  score         Float     @default(0)
-  status        String    @default("PENDING")
-  
+  id         Int    @id @default(autoincrement())
+  title      String
+  author     String
+  tag1       String
+  tag2       String
+  size       String
+  intro      String
+  popularity Int    @default(0)
+  totalScore Int    @default(0)
+  score      Float  @default(0)
+  status     String @default("PENDING")
+
   // 投票统计
-  xiancaoCount  Int       @default(0)
-  liangcaoCount Int       @default(0)
-  gancaoCount   Int       @default(0)
-  kucaoCount    Int       @default(0)
-  ducaoCount    Int       @default(0)
-  
+  xiancaoCount  Int @default(0)
+  liangcaoCount Int @default(0)
+  gancaoCount   Int @default(0)
+  kucaoCount    Int @default(0)
+  ducaoCount    Int @default(0)
+
   submittedById String?
-  submittedBy   User?     @relation("SubmittedBy", fields: [submittedById], references: [id])
+  submittedBy   User?   @relation("SubmittedBy", fields: [submittedById], references: [id])
 
   // 本地文件与阅读扩展
-  postId        Int?          // 知轩藏书原站帖子序号 (zxcs.me/post/{postId})
-  filePath      String?       // 相对于 NOVEL_ROOT 的 TXT 文件路径
-  chapterCount  Int           @default(0)
-  hasContent    Boolean       @default(false) // 是否有本地正文文件
-  coverPath     String?       // 本地封面路径（相对于 public）
-  coverSource   String?       // 封面元数据来源
-  coverSourceUrl String?      // 封面来源地址
+  postId         Int? // 知轩藏书原站帖子序号 (zxcs.me/post/{postId})
+  filePath       String? // 相对于 NOVEL_ROOT 的 TXT 文件路径
+  chapterCount   Int       @default(0)
+  wordCount      Int       @default(0) // 正文非空白字符数，用于展示约多少万字
+  hasContent     Boolean   @default(false) // 是否有本地正文文件
+  coverPath      String? // 本地封面路径（相对于 public）
+  coverSource    String? // 封面元数据来源
+  coverSourceUrl String? // 封面来源地址
   coverFetchedAt DateTime?
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  votes         Vote[]
-  comments      Comment[]
-  chapters      Chapter[]
-  progress      ReadingProgress[]
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  votes            Vote[]
+  comments         Comment[]
+  chapters         Chapter[]
+  progress         ReadingProgress[]
+  bookshelfEntries BookshelfEntry[]
+
   @@index([createdAt])
   @@index([score])
+  @@index([wordCount])
   @@index([xiancaoCount])
   @@map("books")
 }
@@ -82,10 +86,10 @@ model Chapter {
   id          Int    @id @default(autoincrement())
   bookId      Int
   book        Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  idx         Int    // 章节序号（从 1 开始）
+  idx         Int // 章节序号（从 1 开始）
   title       String
-  startOffset Int    // 在 TXT 文件中的起始字节偏移
-  endOffset   Int    // 结束字节偏移（下一章起点或文件末尾）
+  startOffset Int // 在 TXT 文件中的起始字节偏移
+  endOffset   Int // 结束字节偏移（下一章起点或文件末尾）
 
   @@index([bookId, idx])
   @@map("chapters")
@@ -106,41 +110,54 @@ model ReadingProgress {
   @@map("reading_progress")
 }
 
+// 用户书架：独立于阅读记录，未开始阅读的书也可以先收藏
+model BookshelfEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId    Int
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  addedAt   DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, bookId])
+  @@index([userId, addedAt])
+  @@map("bookshelf_entries")
+}
+
 // 投票表
 model Vote {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   type      String
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookId    Int
-  book      Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  createdAt DateTime  @default(now())
-  
-  @@unique([userId, bookId])  // 每个用户对每本书只能投一次票
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, bookId]) // 每个用户对每本书只能投一次票
   @@index([bookId])
   @@map("votes")
 }
 
-
-
 // 评论表
 model Comment {
-  id          String    @id @default(cuid())
-  content     String
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bookId      Int
-  book        Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  parentId    String?   // 父评论ID(用于回复)
-  parent      Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
-  replies     Comment[] @relation("CommentReplies")
-  
-  likeCount   Int       @default(0)
-  dislikeCount Int      @default(0)
-  
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
+  id       String    @id @default(cuid())
+  content  String
+  userId   String
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId   Int
+  book     Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  parentId String? // 父评论ID(用于回复)
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  likeCount    Int @default(0)
+  dislikeCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([bookId])
   @@index([userId])
   @@index([createdAt])

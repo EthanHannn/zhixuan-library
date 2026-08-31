@@ -24,13 +24,21 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search") || "";
     const author = searchParams.get("author") || "";
     const tag = searchParams.get("tag") || "";
+    const tag1 = searchParams.get("tag1") || "";
+    const tag2 = searchParams.get("tag2") || "";
     const onlyContent = searchParams.get("onlyContent") === "1";
+    const requestedMinScore = Number(searchParams.get("minScore") || MIN_BOOK_SCORE);
+    const requestedMaxScore = Number(searchParams.get("maxScore") || "10");
+    const minScore = Math.min(10, Math.max(MIN_BOOK_SCORE, Number.isFinite(requestedMinScore) ? requestedMinScore : MIN_BOOK_SCORE));
+    const maxScore = Math.min(10, Math.max(minScore, Number.isFinite(requestedMaxScore) ? requestedMaxScore : 10));
+    const minWords = Math.max(0, parseInt(searchParams.get("minWords") || "0") || 0);
+    const maxWordsValue = parseInt(searchParams.get("maxWords") || "0") || 0;
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const limit = Math.min(48, Math.max(1, parseInt(searchParams.get("limit") || "20")));
 
     const where: Prisma.BookWhereInput = {
       status,
-      score: { gte: MIN_BOOK_SCORE },
+      score: { gte: minScore, lte: maxScore },
     };
 
     if (onlyContent) {
@@ -40,7 +48,15 @@ export async function GET(req: NextRequest) {
     const filters: Prisma.BookWhereInput[] = [];
     if (search) filters.push({ OR: [{ title: { contains: search } }, { author: { contains: search } }] });
     if (author) where.author = author;
+    if (tag1) where.tag1 = tag1;
+    if (tag2) where.tag2 = tag2;
     if (tag) filters.push({ OR: [{ tag1: tag }, { tag2: tag }] });
+    if (minWords > 0 || maxWordsValue > 0) {
+      where.wordCount = {
+        ...(minWords > 0 ? { gte: minWords } : {}),
+        ...(maxWordsValue > 0 ? { lte: Math.max(minWords, maxWordsValue) } : {}),
+      };
+    }
     if (filters.length) where.AND = filters;
 
     let orderBy: Prisma.BookOrderByWithRelationInput = { score: "desc" };
@@ -52,6 +68,10 @@ export async function GET(req: NextRequest) {
       orderBy = { popularity: "desc" };
     } else if (sortBy === "latest") {
       orderBy = { createdAt: "desc" };
+    } else if (sortBy === "words") {
+      orderBy = { wordCount: "desc" };
+    } else if (sortBy === "title") {
+      orderBy = { title: "asc" };
     }
 
     const [books, total] = await Promise.all([

@@ -116,6 +116,11 @@ function singleChapterIndex(buf, encoding) {
   return [{ idx: 1, title: "全文", startOffset: 0, endOffset: buf.length }];
 }
 
+function countTextCharacters(buf, encoding) {
+  const text = new TextDecoder(encoding).decode(buf);
+  return text.length - (text.match(/\s/g)?.length || 0);
+}
+
 // ---------------- 封面生成 ----------------
 const TAG_COLORS = [
   ["仙侠", ["#0f766e", "#134e4a"]],
@@ -276,7 +281,7 @@ async function main() {
     chapterTotal += chapters.length;
     await prisma.book.update({
       where: { id: created.id },
-      data: { chapterCount: chapters.length },
+      data: { chapterCount: chapters.length, wordCount: countTextCharacters(buf, encoding) },
     });
 
     // 批量插入章节

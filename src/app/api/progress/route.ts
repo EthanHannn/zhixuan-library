@@ -25,6 +25,7 @@ export async function GET() {
             tag1: true,
             hasContent: true,
             chapterCount: true,
+            wordCount: true,
             coverPath: true,
           },
         },

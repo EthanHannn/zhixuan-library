@@ -11,6 +11,7 @@ export interface BookSummary {
   popularity: number;
   hasContent: boolean;
   chapterCount: number;
+  wordCount: number;
   coverPath: string | null;
 }
 
