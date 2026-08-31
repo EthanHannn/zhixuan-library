@@ -7,7 +7,12 @@
  *   node scripts/backfill-word-counts.js --limit 10 --dry-run
  *   node scripts/backfill-word-counts.js --all
  */
-require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
+try {
+  require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
+} catch (error) {
+  // 生产 standalone 镜像直接使用容器环境变量，不包含仅供本地开发的 dotenv。
+  if (error?.code !== "MODULE_NOT_FOUND") throw error;
+}
 const fs = require("fs");
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");

@@ -30,6 +30,7 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/scripts/backfill-word-counts.js ./scripts/backfill-word-counts.js
 
 RUN mkdir -p /app/public/covers /app/data \
     && chown -R node:node /app/public/covers /app/data
