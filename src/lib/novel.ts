@@ -45,7 +45,8 @@ function getBuffer(filePath: string): Buffer {
 
 function detectEncoding(buf: Buffer): "utf-8" | "gb18030" {
   try {
-    new TextDecoder("utf-8", { fatal: true }).decode(buf.subarray(0, 8192));
+    const sample = buf.subarray(0, 8192);
+    new TextDecoder("utf-8", { fatal: true }).decode(sample, { stream: sample.length < buf.length });
     return "utf-8";
   } catch {
     return "gb18030";

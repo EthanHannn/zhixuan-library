@@ -32,7 +32,8 @@ const BANNER_RE = /^(=+|-+)$|更多精校小说|知轩藏书下载|www\.zxcs|作
 // ---------------- 编码与行扫描 ----------------
 function detectEncoding(buf) {
   try {
-    new TextDecoder("utf-8", { fatal: true }).decode(buf.subarray(0, 8192));
+    const sample = buf.subarray(0, 8192);
+    new TextDecoder("utf-8", { fatal: true }).decode(sample, { stream: sample.length < buf.length });
     return "utf-8";
   } catch {
     return "gb18030";
