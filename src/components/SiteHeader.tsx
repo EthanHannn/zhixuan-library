@@ -39,7 +39,7 @@ export function SiteHeader() {
           </div>
         )}
       </div>
-      {session?.user && <nav className="grid grid-cols-3 border-t border-[#ded6c8] bg-[#fffdf8]/90 px-2 md:hidden"><Link href="/library" className={`py-2.5 text-center text-xs ${navClass("/library")}`}>书库</Link><Link href="/bookshelf" className={`py-2.5 text-center text-xs ${navClass("/bookshelf")}`}>我的书架</Link><Link href="/profile" className={`py-2.5 text-center text-xs ${navClass("/profile")}`}>个人中心</Link></nav>}
+      {session?.user && <nav className="grid grid-cols-4 border-t border-[#ded6c8] bg-[#fffdf8]/90 px-2 md:hidden"><Link href="/" className={`py-2.5 text-center text-xs ${navClass("/")}`}>首页</Link><Link href="/library" className={`py-2.5 text-center text-xs ${navClass("/library")}`}>书库</Link><Link href="/bookshelf" className={`py-2.5 text-center text-xs ${navClass("/bookshelf")}`}>我的书架</Link><Link href="/profile" className={`py-2.5 text-center text-xs ${navClass("/profile")}`}>个人中心</Link></nav>}
     </header>
   );
 }

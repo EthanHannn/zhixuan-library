@@ -212,7 +212,7 @@ export default function BookDetailPage() {
               <h2 className="font-serif text-xl font-bold text-[#263e35]">{userVote ? "我的评价" : "这本书怎么样？"}</h2>
               <p className="mt-2 text-sm font-medium leading-6 text-[#6c655b]">每个账号对一本书只能评价一次。</p>
               <div className="mt-5 space-y-2">{voteTypes.map((vote) => <button key={vote.type} onClick={() => handleVote(vote.type)} disabled={!session || !!userVote} className={`flex w-full items-center rounded-xl border px-3 py-2.5 text-left transition ${userVote === vote.type ? "border-[#315f50] bg-[#315f50] text-white" : userVote ? "border-[#e2dbd0] bg-[#f3efe8] text-[#9a9388]" : "border-[#d8cfc0] bg-white text-[#48443e] hover:border-[#315f50] hover:bg-[#f0f4f1]"}`}><span className="mr-3 text-lg">{vote.emoji}</span><span><b className="block text-sm">{vote.label}</b><small className={`text-xs font-medium ${userVote === vote.type ? "text-white/70" : "text-[#777065]"}`}>{vote.description}</small></span></button>)}</div>
-              <p className="mt-5 rounded-xl bg-[#f2eee6] p-3 text-xs font-medium leading-5 text-[#6d655a]">评价只写入当前这套私人书库的数据库，不会同步到知轩原站或其他人的部署。</p>
+              <p className="mt-5 rounded-xl bg-[#f2eee6] p-3 text-xs font-medium leading-5 text-[#6d655a]">评价只写入当前这套私人书库的数据库，不会同步到知轩原站或其他人的部署；已经入库的高分作品不会因少量本地评价被自动移出。</p>
             </section>
           </aside>
         </div>

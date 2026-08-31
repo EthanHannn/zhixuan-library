@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MIN_BOOK_SCORE } from "@/lib/catalog";
 import { z } from "zod";
 
 const voteSchema = z.object({
@@ -66,14 +67,20 @@ export async function POST(req: NextRequest) {
         liangcaoCount: true,
         gancaoCount: true,
         kucaoCount: true,
-        ducaoCount: true
+        ducaoCount: true,
+        hasContent: true,
+        status: true,
       }
     });
 
     if (book) {
       const totalVotes = book.xiancaoCount + book.liangcaoCount + book.gancaoCount + book.kucaoCount + book.ducaoCount;
       const totalScore = book.xiancaoCount * 10 + book.liangcaoCount * 7 + book.gancaoCount * 5 + book.kucaoCount * 3 + book.ducaoCount * 1;
-      const score = totalVotes > 0 ? totalScore / totalVotes : 0;
+      const calculatedScore = totalVotes > 0 ? totalScore / totalVotes : 0;
+      // 已经进入私人高分馆藏的作品不会因为少量本地评价而被自动移出书库。
+      const score = book.hasContent && book.status === "APPROVED"
+        ? Math.max(MIN_BOOK_SCORE, calculatedScore)
+        : calculatedScore;
 
       await prisma.book.update({
         where: { id: bookId },

@@ -134,6 +134,8 @@ export default function ReaderPage() {
   const [fontSize, setFontSize] = useState(20);
   const [theme, setTheme] = useState<(typeof THEMES)[number]>(THEMES[0]);
   const [colorize, setColorize] = useState(true);
+  const [inBookshelf, setInBookshelf] = useState(false);
+  const [shelfLoading, setShelfLoading] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -146,6 +148,14 @@ export default function ReaderPage() {
     if (!isNaN(fs) && fs >= 14 && fs <= 30) setFontSize(fs);
     setColorize(localStorage.getItem(COLORIZE_KEY) !== "false");
   }, []);
+
+  useEffect(() => {
+    if (!session?.user || !Number.isFinite(bookId)) return;
+    fetch(`/api/bookshelf?bookId=${bookId}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setInBookshelf(!!data?.inBookshelf))
+      .catch(() => undefined);
+  }, [bookId, session?.user]);
 
   // 加载书籍与目录
   useEffect(() => {
@@ -313,6 +323,21 @@ export default function ReaderPage() {
     });
   };
 
+  const toggleBookshelf = async () => {
+    if (!session?.user || shelfLoading) return;
+    setShelfLoading(true);
+    try {
+      const response = await fetch(inBookshelf ? `/api/bookshelf?bookId=${bookId}` : "/api/bookshelf", {
+        method: inBookshelf ? "DELETE" : "POST",
+        headers: inBookshelf ? undefined : { "Content-Type": "application/json" },
+        body: inBookshelf ? undefined : JSON.stringify({ bookId }),
+      });
+      if (response.ok) setInBookshelf((current) => !current);
+    } finally {
+      setShelfLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: theme.shell, color: theme.text }}>
@@ -346,11 +371,19 @@ export default function ReaderPage() {
     <div className="reader-root flex h-screen overflow-hidden transition-colors duration-300" style={readerStyle}>
       {/* 顶栏 */}
       <header
-        className="fixed top-0 left-0 right-0 z-30 border-b flex items-center gap-2 px-3 sm:px-5 h-14 backdrop-blur-xl"
+        className="fixed top-0 left-0 right-0 z-30 border-b flex items-center gap-1 px-2 sm:gap-2 sm:px-5 h-14 backdrop-blur-xl"
         style={{ background: theme.chrome, borderColor: theme.border }}
       >
         <Link href={`/book/${bookId}`} className="shrink-0 rounded-full px-2.5 py-1.5 text-sm transition-opacity hover:opacity-65">← <span className="hidden sm:inline">详情</span></Link>
-        <span className="min-w-0 flex-1 truncate text-center text-sm sm:text-base font-bold" style={{ color: theme.title }}>{book.title}</span>
+        <Link href={`/book/${bookId}`} className="min-w-0 flex-1 truncate text-center text-sm font-bold transition-opacity hover:opacity-65 sm:text-base" style={{ color: theme.title }} title="返回小说详情">{book.title}</Link>
+        <button
+          type="button"
+          onClick={toggleBookshelf}
+          disabled={shelfLoading || !session?.user}
+          className="shrink-0 rounded-full border px-2 py-1.5 text-xs font-bold transition-opacity hover:opacity-75 disabled:opacity-45 sm:px-3 sm:text-sm"
+          style={{ borderColor: inBookshelf ? theme.accent : theme.border, background: theme.accentSoft, color: theme.accent }}
+          title={inBookshelf ? "从书架移出" : "加入书架"}
+        >{shelfLoading ? "…" : inBookshelf ? "✓ 已加" : "+ 书架"}</button>
         <button
           type="button"
           onClick={() => { setTocOpen(!tocOpen); setPaletteOpen(false); }}
