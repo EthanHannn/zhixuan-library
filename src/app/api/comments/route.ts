@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, comment });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
     }
     console.error("评论失败:", error);
     return NextResponse.json({ error: "评论失败" }, { status: 500 });

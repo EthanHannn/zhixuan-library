@@ -2,7 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
@@ -22,6 +23,7 @@ model User {
   votes         Vote[]
   comments      Comment[]
   submittedBooks Book[]   @relation("SubmittedBy")
+  progress      ReadingProgress[]
   
   @@map("users")
 }
@@ -49,17 +51,54 @@ model Book {
   
   submittedById String?
   submittedBy   User?     @relation("SubmittedBy", fields: [submittedById], references: [id])
-  
+
+  // 本地文件与阅读扩展
+  postId        Int?          // 知轩藏书原站帖子序号 (zxcs.me/post/{postId})
+  filePath      String?       // 相对于 NOVEL_ROOT 的 TXT 文件路径
+  chapterCount  Int           @default(0)
+  hasContent    Boolean       @default(false) // 是否有本地正文文件
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
   votes         Vote[]
   comments      Comment[]
+  chapters      Chapter[]
+  progress      ReadingProgress[]
   
   @@index([createdAt])
   @@index([score])
   @@index([xiancaoCount])
   @@map("books")
+}
+
+// 章节索引表（正文按字节偏移从本地 TXT 读取）
+model Chapter {
+  id          Int    @id @default(autoincrement())
+  bookId      Int
+  book        Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  idx         Int    // 章节序号（从 1 开始）
+  title       String
+  startOffset Int    // 在 TXT 文件中的起始字节偏移
+  endOffset   Int    // 结束字节偏移（下一章起点或文件末尾）
+
+  @@index([bookId, idx])
+  @@map("chapters")
+}
+
+// 阅读进度
+model ReadingProgress {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId     Int
+  book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapterIdx Int      @default(1)
+  percent    Float    @default(0) // 本章内阅读百分比 0-1
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, bookId])
+  @@map("reading_progress")
 }
 
 // 投票表

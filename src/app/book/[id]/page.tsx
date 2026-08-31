@@ -20,6 +20,9 @@ interface Book {
   kucaoCount: number;
   ducaoCount: number;
   popularity: number;
+  hasContent: boolean;
+  chapterCount: number;
+  postId: number | null;
   submittedBy?: {
     username: string;
   };
@@ -56,6 +59,7 @@ export default function BookDetailPage() {
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [progress, setProgress] = useState<{ chapterIdx: number; percent: number } | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -63,9 +67,32 @@ export default function BookDetailPage() {
       fetchComments();
       if (session) {
         fetchUserVote();
+        fetchProgress();
+      } else {
+        try {
+          const raw = localStorage.getItem(`zx_reading_${id}`);
+          if (raw) {
+            const p = JSON.parse(raw);
+            if (p?.chapterIdx) setProgress({ chapterIdx: p.chapterIdx, percent: p.percent || 0 });
+          }
+        } catch { /* ignore */ }
       }
     }
   }, [id, session]);
+
+  const fetchProgress = async () => {
+    try {
+      const res = await fetch(`/api/books/${id}/progress`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.progress) {
+          setProgress({ chapterIdx: data.progress.chapterIdx, percent: data.progress.percent });
+        }
+      }
+    } catch (error) {
+      console.error("获取阅读进度失败:", error);
+    }
+  };
 
   const fetchBook = async () => {
     try {
@@ -201,46 +228,88 @@ export default function BookDetailPage() {
       <main className="container mx-auto px-4 py-8">
         {/* 书籍信息 */}
         <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-8 mb-8">
-          <h1 className="text-3xl font-bold text-[#1a1a1a] dark:text-[#E8E4D9] mb-4">
-            {book.title}
-          </h1>
-          
-          <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400 mb-6">
-            <span>作者: {book.author}</span>
-            <span>分类: {book.tag1} / {book.tag2}</span>
-            <span>字数: {book.size}</span>
-          </div>
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* 封面 */}
+            <div className="flex-shrink-0 mx-auto md:mx-0">
+              <img
+                src={`/covers/${book.id}.svg`}
+                alt={book.title}
+                className="w-44 h-60 object-cover rounded-lg shadow-lg"
+              />
+            </div>
 
-          {/* 评分和投票统计 */}
-          <div className="flex flex-wrap gap-6 mb-6 p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-[#2F5D50]">{book.score.toFixed(2)}</div>
-              <div className="text-sm text-gray-500">综合评分</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{book.xiancaoCount}</div>
-              <div className="text-sm text-gray-500">🌟 仙草</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-yellow-600">{book.liangcaoCount}</div>
-              <div className="text-sm text-gray-500">🌾 粮草</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-600">{book.gancaoCount}</div>
-              <div className="text-sm text-gray-500">🌿 干草</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">{book.kucaoCount}</div>
-              <div className="text-sm text-gray-500">🍂 枯草</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-600">{book.ducaoCount}</div>
-              <div className="text-sm text-gray-500">☠️ 毒草</div>
+            <div className="flex-1">
+              <h1 className="text-3xl font-bold text-[#1a1a1a] dark:text-[#E8E4D9] mb-4">
+                {book.title}
+              </h1>
+
+              <div className="flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-400 mb-6">
+                <span>作者: {book.author}</span>
+                <span>分类: {book.tag1} / {book.tag2}</span>
+                <span>字数: {book.size}</span>
+                {book.hasContent && (
+                  <span className="text-[#2F5D50] dark:text-[#5A9A85]">共 {book.chapterCount} 章</span>
+                )}
+              </div>
+
+              {/* 阅读操作区 */}
+              <div className="flex flex-wrap gap-3 mb-6">
+                {book.hasContent ? (
+                  <Link
+                    href={`/read/${book.id}${progress ? `?c=${progress.chapterIdx}` : ""}`}
+                    className="px-6 py-2.5 bg-[#2F5D50] text-white rounded-lg hover:bg-[#3d7766] transition text-center"
+                  >
+                    {progress ? `继续阅读（第 ${progress.chapterIdx} 章${progress.percent > 0.02 ? ` · ${Math.round(progress.percent * 100)}%` : ""}）` : "开始阅读"}
+                  </Link>
+                ) : (
+                  <span className="px-6 py-2.5 bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-lg cursor-not-allowed">
+                    暂无本地正文
+                  </span>
+                )}
+                {book.postId && (
+                  <a
+                    href={`http://zxcs.me/post/${book.postId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition text-center"
+                  >
+                    查看原站 ↗
+                  </a>
+                )}
+              </div>
+
+              {/* 评分和投票统计 */}
+              <div className="flex flex-wrap gap-6 p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-[#2F5D50]">{book.score.toFixed(2)}</div>
+                  <div className="text-sm text-gray-500">综合评分</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{book.xiancaoCount}</div>
+                  <div className="text-sm text-gray-500">🌟 仙草</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-600">{book.liangcaoCount}</div>
+                  <div className="text-sm text-gray-500">🌾 粮草</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-600">{book.gancaoCount}</div>
+                  <div className="text-sm text-gray-500">🌿 干草</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{book.kucaoCount}</div>
+                  <div className="text-sm text-gray-500">🍂 枯草</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{book.ducaoCount}</div>
+                  <div className="text-sm text-gray-500">☠️ 毒草</div>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* 简介 */}
-          <div className="mb-6">
+          <div className="mb-6 mt-6">
             <h2 className="text-lg font-bold text-[#1a1a1a] dark:text-[#E8E4D9] mb-2">简介</h2>
             <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
               {book.intro}

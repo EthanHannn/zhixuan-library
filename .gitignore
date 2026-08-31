@@ -20,6 +20,9 @@
 # production
 /build
 
+# generated novel covers
+/public/covers/
+
 # misc
 .DS_Store
 *.pem

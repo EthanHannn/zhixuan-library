@@ -1,17 +1,36 @@
 # 知轩藏书排行榜 - 服务器版
 
-这是知轩藏书排行榜的服务器版本,使用 Next.js + Prisma + SQLite 构建,支持用户系统、评论功能和书籍管理。
+这是知轩藏书排行榜的服务器版本,使用 Next.js + Prisma + SQLite 构建,支持用户系统、评论功能、书籍管理,以及**本地小说在线阅读**。
 
 ## 功能特性
 
 - ✅ 用户注册/登录系统(用户名+密码)
-- ✅ 书籍列表展示与搜索
-- ✅ 书籍详情页
+- ✅ 书籍列表展示与搜索(封面墙,支持"只看有正文"筛选)
+- ✅ 书籍详情页(封面、简介、评分、**开始阅读**、**查看原站**)
+- ✅ **本地小说在线阅读**(`/read/[id]`):章节目录、上下章、字号调节、三套阅读主题(亮色/羊皮纸/夜间)、键盘翻页、阅读进度记忆(本地 + 云端同步)
+- ✅ 个人中心:**最近阅读**(续读入口) + 投票记录
 - ✅ 投票功能(仙草/粮草/干草/枯草/毒草)
 - ✅ 评论系统(支持回复)
-- ✅ 个人中心
-- ✅ 提交新书
-- ✅ 管理员审核
+- ✅ 提交新书 / 管理员审核
+
+## 本地正文导入
+
+项目通过 `scripts/import-full.js` 把本地已解压的知轩藏书 TXT 合集导入 SQLite:
+
+```bash
+# 全量导入(元数据来自 scripts/catalog.json,正文扫描 NOVEL_ROOT 下的分卷文件夹)
+node scripts/import-full.js --reset
+
+# 用文件夹名中的 POST序号 补匹配未命中的书籍
+node scripts/rematch.js
+```
+
+> **警告:** `--reset` 会清空现有书籍、章节、投票、评论和阅读进度,只应在首次初始化或确定要重建全部数据时使用。
+
+- 正文不复制进数据库,按 **GB18030 字节偏移** 建立章节索引,按需从磁盘读取
+- `NOVEL_ROOT` 环境变量指向小说根目录(见 `.env`)
+- 导入时自动为每本书生成封面 SVG 到 `public/covers/{id}.svg`;该目录由 Git 忽略,部署时需要重新生成
+- 数据源: `scripts/catalog.json`(由知轩藏书统计 Excel 生成,含 6759 本书的元数据)
 
 ## 技术栈
 
@@ -52,6 +71,9 @@ DATABASE_URL="file:./dev.db"
 # NextAuth 配置
 NEXTAUTH_URL="http://localhost:3000"
 NEXTAUTH_SECRET="your-secret-key-here"
+
+# 本地已解压的小说根目录（推荐使用正斜杠，便于跨平台配置）
+NOVEL_ROOT="E:/path/to/novels"
 ```
 
 ### 3. 初始化数据库
@@ -69,8 +91,8 @@ npx prisma migrate dev --name init
 **重要**: 使用新的跨平台兼容脚本
 
 ```bash
-# 导入 6759 本书籍数据
-node scripts/import-books-prisma.js
+# 导入 6759 本书籍元数据 + 本地正文章节索引
+node scripts/import-full.js
 ```
 
 ### 5. 启动开发服务器
@@ -88,7 +110,7 @@ npm run dev
 如果遇到问题:
 1. 确保使用 Node.js 18+ 版本
 2. 删除 `node_modules` 和 `package-lock.json` 重新安装
-3. 使用 `node scripts/import-books-prisma.js` 导入数据
+3. 使用 `node scripts/import-full.js` 导入数据
 
 ## 项目结构
 

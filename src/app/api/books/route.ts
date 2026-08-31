@@ -20,12 +20,17 @@ export async function GET(req: NextRequest) {
     const sortBy = searchParams.get("sortBy") || "score";
     const status = searchParams.get("status") || "APPROVED";
     const search = searchParams.get("search") || "";
+    const onlyContent = searchParams.get("onlyContent") === "1";
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
 
     const where: any = {
       status: status as any
     };
+
+    if (onlyContent) {
+      where.hasContent = true;
+    }
 
     if (search) {
       where.OR = [
@@ -100,7 +105,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, book });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 });
     }
     console.error("提交书籍失败:", error);
     return NextResponse.json({ error: "提交书籍失败" }, { status: 500 });
