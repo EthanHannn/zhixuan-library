@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
@@ -31,7 +31,6 @@ const PROGRESS_PREFIX = "zx_reading_";
 
 export default function ReaderPage() {
   const { id } = useParams();
-  const router = useRouter();
   const { data: session } = useSession();
 
   const bookId = parseInt(id as string);
@@ -46,7 +45,7 @@ export default function ReaderPage() {
   const [theme, setTheme] = useState<(typeof THEMES)[number]>(THEMES[0]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const saveTimer = useRef<any>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 初始化主题与字号
   useEffect(() => {
@@ -76,7 +75,6 @@ export default function ReaderPage() {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId]);
 
   const resolveStartChapter = async (bid: number, total: number) => {

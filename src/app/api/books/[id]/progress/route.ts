@@ -18,7 +18,7 @@ export async function GET(
     if (isNaN(bookId)) {
       return NextResponse.json({ error: "无效的书籍ID" }, { status: 400 });
     }
-    const userId = (session.user as any).id;
+    const userId = session.user.id;
 
     const progress = await prisma.readingProgress.findUnique({
       where: { userId_bookId: { userId, bookId } },
@@ -55,7 +55,7 @@ export async function POST(
       return NextResponse.json({ error: "书籍不存在" }, { status: 404 });
     }
 
-    const userId = (session.user as any).id;
+    const userId = session.user.id;
     const progress = await prisma.readingProgress.upsert({
       where: { userId_bookId: { userId, bookId } },
       update: { chapterIdx, percent },

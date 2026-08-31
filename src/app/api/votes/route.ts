@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const existingVote = await prisma.vote.findUnique({
       where: {
         userId_bookId: {
-          userId: (session.user as any).id,
+          userId: session.user.id,
           bookId
         }
       }
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     // 创建投票
     const vote = await prisma.vote.create({
       data: {
-        userId: (session.user as any).id,
+        userId: session.user.id,
         bookId,
         type
       }
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
       const vote = await prisma.vote.findUnique({
         where: {
           userId_bookId: {
-            userId: (session.user as any).id,
+            userId: session.user.id,
             bookId: parseInt(bookId)
           }
         }
@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
       // 获取用户所有投票
       const votes = await prisma.vote.findMany({
         where: {
-          userId: (session.user as any).id
+          userId: session.user.id
         },
         include: {
           book: true

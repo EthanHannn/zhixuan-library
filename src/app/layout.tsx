@@ -10,8 +10,8 @@ const notoSerifSC = Noto_Serif_SC({
 });
 
 export const metadata: Metadata = {
-  title: "知轩藏书 - 水墨写意",
-  description: "知轩藏书排行榜 - 服务器版",
+  title: "知轩书房 · 私人高分藏书",
+  description: "只为获准成员开放的私人高分小说书房",
 };
 
 export default function RootLayout({

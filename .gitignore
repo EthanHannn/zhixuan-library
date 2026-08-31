@@ -23,6 +23,12 @@
 # generated novel covers
 /public/covers/
 
+# generated deployment exports
+/exports/
+
+# resumable scraper state
+/var/
+
 # misc
 .DS_Store
 *.pem

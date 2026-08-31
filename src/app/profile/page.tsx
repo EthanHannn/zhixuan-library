@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BookCover } from "@/components/BookCover";
+import { SiteHeader } from "@/components/SiteHeader";
 
 interface Vote {
   id: string;
@@ -27,6 +29,7 @@ interface ReadingEntry {
     tag1: string;
     hasContent: boolean;
     chapterCount: number;
+    coverPath: string | null;
   };
 }
 
@@ -94,32 +97,19 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F2F2EB] dark:bg-[#1C1C1E]">
-      {/* 头部导航 */}
-      <header className="border-b border-gray-200 dark:border-gray-700 bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/" className="text-[#2F5D50] hover:underline">
-            ← 返回首页
-          </Link>
-          <button
-            onClick={() => signOut({ callbackUrl: "/" })}
-            className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-          >
-            登出
-          </button>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#f5f1e8]">
+      <SiteHeader />
 
       <main className="container mx-auto px-4 py-8">
         {/* 用户信息 */}
         <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-8 mb-8">
           <div className="flex items-center gap-6">
             <div className="w-20 h-20 rounded-full bg-[#2F5D50] flex items-center justify-center text-white text-3xl font-bold">
-              {((session.user as any)?.username || "U").charAt(0).toUpperCase()}
+              {(session.user.nickname || session.user.username || "U").charAt(0).toUpperCase()}
             </div>
             <div>
               <h1 className="text-2xl font-bold text-[#1a1a1a] dark:text-[#E8E4D9]">
-                {(session.user as any)?.username}
+                {session.user.nickname || session.user.username}
               </h1>
               <p className="text-sm text-gray-500 mt-1">
                 已投票 {votes.length} 本书
@@ -146,9 +136,10 @@ export default function ProfilePage() {
                   className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition"
                 >
                   <div className="flex items-center gap-4 min-w-0">
-                    <img
-                      src={`/covers/${r.book.id}.svg`}
-                      alt={r.book.title}
+                    <BookCover
+                      id={r.book.id}
+                      title={r.book.title}
+                      coverPath={r.book.coverPath}
                       className="w-10 h-14 object-cover rounded shadow"
                     />
                     <div className="min-w-0">
@@ -158,9 +149,7 @@ export default function ProfilePage() {
                       >
                         {r.book.title}
                       </Link>
-                      <p className="text-sm text-gray-500 line-clamp-1">
-                        {r.book.author} · {r.book.tag1}
-                      </p>
+                      <p className="text-sm text-gray-500 line-clamp-1"><Link href={`/author/${encodeURIComponent(r.book.author)}`} className="hover:underline">{r.book.author}</Link> · {r.book.tag1}</p>
                       <p className="text-xs text-gray-400">
                         读到第 {r.chapterIdx} 章{r.percent > 0.02 ? ` · ${Math.round(r.percent * 100)}%` : ""} ·{" "}
                         {new Date(r.updatedAt).toLocaleDateString("zh-CN")}

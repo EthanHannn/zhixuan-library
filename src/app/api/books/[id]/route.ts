@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { MIN_BOOK_SCORE } from "@/lib/catalog";
 
 export async function GET(
   req: NextRequest,
@@ -13,12 +14,13 @@ export async function GET(
       return NextResponse.json({ error: "无效的书籍ID" }, { status: 400 });
     }
 
-    const book = await prisma.book.findUnique({
-      where: { id: bookId },
+    const book = await prisma.book.findFirst({
+      where: { id: bookId, score: { gte: MIN_BOOK_SCORE } },
       include: {
         submittedBy: {
           select: {
-            username: true
+            username: true,
+            nickname: true,
           }
         },
         _count: {

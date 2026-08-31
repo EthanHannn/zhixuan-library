@@ -299,7 +299,7 @@ async function main() {
   }
 
   // 未匹配文件统计
-  for (const [key, p] of fileMap) unmatchedFiles.push(key);
+  for (const key of fileMap.keys()) unmatchedFiles.push(key);
   const sec = Math.round((Date.now() - startTime) / 1000);
   console.log("\n=== 导入完成 ===");
   console.log(`用时: ${sec}s`);

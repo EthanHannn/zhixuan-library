@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f1e8;
+  --foreground: #292722;
 }
 
 @theme inline {
@@ -12,15 +12,18 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Noto Sans SC", "Microsoft YaHei", Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+}
+
+.font-serif {
+  font-family: var(--font-noto-serif-sc), "Songti SC", SimSun, serif;
+}
+
+::selection {
+  background: #c9876f;
+  color: #fff;
 }

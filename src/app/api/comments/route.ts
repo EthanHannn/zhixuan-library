@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
     const comment = await prisma.comment.create({
       data: {
-        userId: (session.user as any).id,
+        userId: session.user.id,
         bookId,
         content,
         parentId
@@ -30,7 +30,8 @@ export async function POST(req: NextRequest) {
       include: {
         user: {
           select: {
-            username: true
+            username: true,
+            nickname: true,
           }
         }
       }
@@ -63,14 +64,16 @@ export async function GET(req: NextRequest) {
       include: {
         user: {
           select: {
-            username: true
+            username: true,
+            nickname: true,
           }
         },
         replies: {
           include: {
             user: {
               select: {
-                username: true
+                username: true,
+                nickname: true,
               }
             }
           },

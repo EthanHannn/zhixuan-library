@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,10 +26,11 @@ export default function LoginPage() {
       if (result?.error) {
         setError("用户名或密码错误");
       } else {
-        router.push("/");
+        const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
+        router.push(callbackUrl || "/");
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       setError("登录失败,请稍后重试");
     } finally {
       setLoading(false);
@@ -38,21 +38,37 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F2F2EB] dark:bg-[#1C1C1E] flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-8 shadow-lg">
-        <h1 className="text-2xl font-bold text-center text-[#1a1a1a] dark:text-[#E8E4D9] mb-6">
-          登录知轩藏书
-        </h1>
+    <div className="relative min-h-screen overflow-hidden bg-[#f3efe5] px-4 text-stone-900">
+      <div className="absolute -left-24 top-24 h-72 w-72 rounded-full bg-[#b75d3e]/15 blur-3xl" />
+      <div className="absolute -right-20 bottom-16 h-80 w-80 rounded-full bg-[#315b4c]/15 blur-3xl" />
+      <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center lg:justify-between">
+        <section className="hidden max-w-xl lg:block">
+          <p className="mb-5 text-sm font-semibold tracking-[0.35em] text-[#9a4d33]">PRIVATE LIBRARY</p>
+          <h1 className="font-serif text-6xl font-bold leading-[1.12] text-[#243b32]">
+            一间只为熟人<br />亮灯的书房
+          </h1>
+          <p className="mt-7 max-w-lg text-lg leading-8 text-stone-600">
+            精选高分作品、完整章节与私人阅读进度，都收在门后。登录后，慢慢挑一本今晚想读的书。
+          </p>
+        </section>
+
+        <div className="w-full max-w-md rounded-[2rem] border border-white/80 bg-white/75 p-8 shadow-[0_24px_80px_rgba(49,91,76,0.16)] backdrop-blur-xl sm:p-10">
+          <div className="mb-8">
+            <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#315b4c] font-serif text-xl text-white">知</div>
+            <p className="text-sm tracking-[0.22em] text-[#9a4d33]">知轩藏书</p>
+            <h2 className="mt-2 font-serif text-3xl font-bold text-[#243b32]">欢迎回到书房</h2>
+            <p className="mt-2 text-sm text-stone-500">这是私人空间，请使用已授权账号进入。</p>
+          </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-sm">
+          <div className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="mb-2 block text-sm font-medium text-stone-700">
               用户名
             </label>
             <input
@@ -60,13 +76,13 @@ export default function LoginPage() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
+              className="w-full rounded-xl border border-stone-200 bg-white/80 px-4 py-3 outline-none transition focus:border-[#315b4c] focus:ring-4 focus:ring-[#315b4c]/10"
               placeholder="请输入用户名"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label className="mb-2 block text-sm font-medium text-stone-700">
               密码
             </label>
             <input
@@ -74,7 +90,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
+              className="w-full rounded-xl border border-stone-200 bg-white/80 px-4 py-3 outline-none transition focus:border-[#315b4c] focus:ring-4 focus:ring-[#315b4c]/10"
               placeholder="请输入密码"
             />
           </div>
@@ -82,24 +98,14 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 bg-[#2F5D50] text-white rounded hover:bg-[#3d7766] transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-xl bg-[#315b4c] py-3.5 font-medium text-white shadow-lg shadow-[#315b4c]/20 transition hover:-translate-y-0.5 hover:bg-[#274a3e] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "登录中..." : "登录"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
-          还没有账号?{" "}
-          <Link href="/register" className="text-[#2F5D50] hover:underline">
-            立即注册
-          </Link>
-        </p>
-
-        <p className="mt-4 text-center">
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-            ← 返回首页
-          </Link>
-        </p>
+          <p className="mt-6 text-center text-xs leading-5 text-stone-400">没有账号请联系书库管理员创建，本站不开放公开注册。</p>
+        </div>
       </div>
     </div>
   );

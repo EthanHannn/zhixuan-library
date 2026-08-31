@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { MIN_BOOK_SCORE } from "@/lib/catalog";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 const bookSchema = z.object({
@@ -20,34 +22,36 @@ export async function GET(req: NextRequest) {
     const sortBy = searchParams.get("sortBy") || "score";
     const status = searchParams.get("status") || "APPROVED";
     const search = searchParams.get("search") || "";
+    const author = searchParams.get("author") || "";
+    const tag = searchParams.get("tag") || "";
     const onlyContent = searchParams.get("onlyContent") === "1";
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "20");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+    const limit = Math.min(48, Math.max(1, parseInt(searchParams.get("limit") || "20")));
 
-    const where: any = {
-      status: status as any
+    const where: Prisma.BookWhereInput = {
+      status,
+      score: { gte: MIN_BOOK_SCORE },
     };
 
     if (onlyContent) {
       where.hasContent = true;
     }
 
-    if (search) {
-      where.OR = [
-        { title: { contains: search } },
-        { author: { contains: search } }
-      ];
-    }
+    const filters: Prisma.BookWhereInput[] = [];
+    if (search) filters.push({ OR: [{ title: { contains: search } }, { author: { contains: search } }] });
+    if (author) where.author = author;
+    if (tag) filters.push({ OR: [{ tag1: tag }, { tag2: tag }] });
+    if (filters.length) where.AND = filters;
 
-    const orderBy: any = {};
+    let orderBy: Prisma.BookOrderByWithRelationInput = { score: "desc" };
     if (sortBy === "score") {
-      orderBy.score = "desc";
+      orderBy = { score: "desc" };
     } else if (sortBy === "xiancao") {
-      orderBy.xiancaoCount = "desc";
+      orderBy = { xiancaoCount: "desc" };
     } else if (sortBy === "popularity") {
-      orderBy.popularity = "desc";
+      orderBy = { popularity: "desc" };
     } else if (sortBy === "latest") {
-      orderBy.createdAt = "desc";
+      orderBy = { createdAt: "desc" };
     }
 
     const [books, total] = await Promise.all([
@@ -97,7 +101,7 @@ export async function POST(req: NextRequest) {
     const book = await prisma.book.create({
       data: {
         ...data,
-        submittedById: (session.user as any).id,
+        submittedById: session.user.id,
         status: "PENDING"  // 需要管理员审核
       }
     });

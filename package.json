@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:auth": "node scripts/smoke-auth.js",
+    "seed:owner": "node scripts/seed-owner.js",
+    "scrape:covers": "node scripts/scrape-covers.js"
   },
   "dependencies": {
-    "@auth/prisma-adapter": "^2.11.1",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",

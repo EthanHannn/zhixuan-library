@@ -15,6 +15,7 @@ datasource db {
 model User {
   id            String    @id @default(cuid())
   username      String    @unique
+  nickname      String?
   password      String    // 哈希后的密码
   role          String    @default("USER")
   createdAt     DateTime  @default(now())
@@ -57,6 +58,10 @@ model Book {
   filePath      String?       // 相对于 NOVEL_ROOT 的 TXT 文件路径
   chapterCount  Int           @default(0)
   hasContent    Boolean       @default(false) // 是否有本地正文文件
+  coverPath     String?       // 本地封面路径（相对于 public）
+  coverSource   String?       // 封面元数据来源
+  coverSourceUrl String?      // 封面来源地址
+  coverFetchedAt DateTime?
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

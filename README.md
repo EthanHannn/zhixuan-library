@@ -12,6 +12,23 @@
 - ✅ 投票功能(仙草/粮草/干草/枯草/毒草)
 - ✅ 评论系统(支持回复)
 - ✅ 提交新书 / 管理员审核
+- ✅ 私有书房权限:除登录与认证接口外,页面、API 和封面均需登录
+- ✅ 作者作品聚合、动态分类书架与真实封面元数据
+
+## 私有访问与初始账号
+
+本站默认作为私人书房运行,没有公开注册入口。初始管理员由幂等脚本创建:
+
+```bash
+npm run seed:owner
+```
+
+- 初始用户名:`codingCat`
+- 初始密码:`Think24`
+- 昵称:`老板`
+- 角色:`ADMIN`
+
+生产部署前应通过 `OWNER_USERNAME`、`OWNER_PASSWORD` 和 `OWNER_NICKNAME` 覆盖默认值,并设置随机的 `NEXTAUTH_SECRET`。重复执行种子不会重置已有密码;只有显式执行 `npm run seed:owner -- --reset-password` 才会覆盖密码。
 
 ## 本地正文导入
 
@@ -32,9 +49,23 @@ node scripts/rematch.js
 - 导入时自动为每本书生成封面 SVG 到 `public/covers/{id}.svg`;该目录由 Git 忽略,部署时需要重新生成
 - 数据源: `scripts/catalog.json`(由知轩藏书统计 Excel 生成,含 6759 本书的元数据)
 
+## 高分封面刮削
+
+原知轩站目前无法解析,封面脚本使用公开的图书建议元数据进行严格的书名+作者匹配,只下载到本地,不在页面中盗链远程图片:
+
+```bash
+# 默认评分 >= MIN_BOOK_SCORE,单并发,每批100本
+npm run scrape:covers
+
+# 扩大一个可续跑批次;0表示处理所有剩余作品
+node scripts/scrape-covers.js --limit 300
+```
+
+脚本默认在元数据请求之间随机等待 4.5~7.5 秒,遇到 HTTP 403/429 会立即停止,不会轮换 IP 或绕过限制。运行状态保存在 Git 忽略的 `var/cover-scrape-state.json`,真实封面保存在 `public/covers/real/`,并在数据库记录来源和抓取时间。
+
 ## 技术栈
 
-- **前端框架**: Next.js 14 (App Router)
+- **前端框架**: Next.js 16 (App Router)
 - **样式方案**: TailwindCSS
 - **数据库**: SQLite (开发环境)
 - **ORM**: Prisma 5.22.0
@@ -74,6 +105,9 @@ NEXTAUTH_SECRET="your-secret-key-here"
 
 # 本地已解压的小说根目录（推荐使用正斜杠，便于跨平台配置）
 NOVEL_ROOT="E:/path/to/novels"
+
+# 只展示和处理该评分以上的作品
+MIN_BOOK_SCORE="7.5"
 ```
 
 ### 3. 初始化数据库
@@ -108,7 +142,7 @@ npm run dev
 本项目已移除 `better-sqlite3` 依赖,完全使用 Prisma Client,确保在 Windows 环境下无需编译原生模块。
 
 如果遇到问题:
-1. 确保使用 Node.js 18+ 版本
+1. 确保使用 Node.js 20.9+ 版本
 2. 删除 `node_modules` 和 `package-lock.json` 重新安装
 3. 使用 `node scripts/import-full.js` 导入数据
 

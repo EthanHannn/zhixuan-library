@@ -8,6 +8,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     username: "",
+    nickname: "",
     password: "",
     confirmPassword: ""
   });
@@ -30,8 +31,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("密码至少需要6个字符");
+    if (formData.password.length < 8) {
+      setError("密码至少需要8个字符");
       return;
     }
 
@@ -45,6 +46,7 @@ export default function RegisterPage() {
         },
         body: JSON.stringify({
           username: formData.username,
+          nickname: formData.nickname,
           password: formData.password
         })
       });
@@ -56,9 +58,9 @@ export default function RegisterPage() {
         return;
       }
 
-      // 注册成功,跳转到登录页
-      router.push("/login?registered=true");
-    } catch (err) {
+      router.push("/");
+      router.refresh();
+    } catch {
       setError("注册失败,请稍后重试");
     } finally {
       setLoading(false);
@@ -69,7 +71,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-[#F2F2EB] dark:bg-[#1C1C1E] flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-lg p-8 shadow-lg">
         <h1 className="text-2xl font-bold text-center text-[#1a1a1a] dark:text-[#E8E4D9] mb-6">
-          注册知轩藏书
+          创建书库成员
         </h1>
 
         {error && (
@@ -79,6 +81,22 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              昵称
+            </label>
+            <input
+              type="text"
+              name="nickname"
+              value={formData.nickname}
+              onChange={handleChange}
+              required
+              maxLength={30}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
+              placeholder="成员在书库中显示的名字"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               用户名
@@ -106,9 +124,9 @@ export default function RegisterPage() {
               value={formData.password}
               onChange={handleChange}
               required
-              minLength={6}
+              minLength={8}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-[#2F5D50] dark:bg-gray-700 dark:text-white"
-              placeholder="至少6个字符"
+              placeholder="至少8个字符"
             />
           </div>
 
@@ -132,20 +150,13 @@ export default function RegisterPage() {
             disabled={loading}
             className="w-full py-2 bg-[#2F5D50] text-white rounded hover:bg-[#3d7766] transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "注册中..." : "注册"}
+            {loading ? "创建中..." : "创建成员"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
-          已有账号?{" "}
-          <Link href="/login" className="text-[#2F5D50] hover:underline">
-            立即登录
-          </Link>
-        </p>
-
         <p className="mt-4 text-center">
           <Link href="/" className="text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-            ← 返回首页
+            ← 返回书库
           </Link>
         </p>
       </div>
