@@ -26,6 +26,12 @@
 # generated deployment exports
 /exports/
 
+# local production deployment secrets and artifacts
+/deploy/.env.production
+/deploy/*.tar
+/deploy/*.tar.gz
+/deploy/*.sha256
+
 # resumable scraper state
 /var/
 
@@ -42,6 +48,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!/deploy/.env.production.example
 
 # vercel
 .vercel

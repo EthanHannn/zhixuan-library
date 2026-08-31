@@ -4,10 +4,11 @@ import { NextRequest, NextResponse } from "next/server";
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const isLoginPage = pathname === "/login";
+  const isHealthEndpoint = pathname === "/api/health";
   const isNextAuthEndpoint =
     pathname.startsWith("/api/auth/") && pathname !== "/api/auth/register";
 
-  if (isNextAuthEndpoint) {
+  if (isNextAuthEndpoint || isHealthEndpoint) {
     return NextResponse.next();
   }
 
