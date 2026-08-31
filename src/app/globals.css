@@ -27,3 +27,8 @@ body {
   background: #c9876f;
   color: #fff;
 }
+
+.reader-root ::selection {
+  background: var(--reader-selection);
+  color: var(--reader-selection-text);
+}
