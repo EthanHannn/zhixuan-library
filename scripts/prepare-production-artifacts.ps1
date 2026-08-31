@@ -111,7 +111,8 @@ $hashLines = foreach ($artifactName in $artifactNames) {
     "$hash  $artifactName"
   }
 }
-[IO.File]::WriteAllLines((Join-Path $deployDir "zhixuan-artifacts.sha256"), $hashLines, [Text.UTF8Encoding]::new($false))
+$hashText = ($hashLines -join "`n") + "`n"
+[IO.File]::WriteAllText((Join-Path $deployDir "zhixuan-artifacts.sha256"), $hashText, [Text.UTF8Encoding]::new($false))
 
 Get-ChildItem -LiteralPath $deployDir -File |
   Where-Object { $_.Name -in ($artifactNames + @("zhixuan-artifacts.sha256")) } |
