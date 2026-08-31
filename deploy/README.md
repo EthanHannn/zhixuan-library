@@ -7,7 +7,7 @@
 - `data/library.db`：可写 SQLite 数据库。
 - `novels/`：只读挂载的评分不低于 7.5 的正文。
 - `covers/`：只读封面。
-- `nginx-library.conf`：`library.aivideoart.cn` 的反向代理模板。
+- `nginx-library.conf`：签发证书前使用的 HTTP / ACME 反向代理模板。
+- `nginx-library-https.conf`：证书就绪后使用的 HTTPS 与强制跳转模板。
 
 镜像必须在本地或 CI 构建为 `linux/amd64`，服务器只负责加载镜像和启动容器。
-
