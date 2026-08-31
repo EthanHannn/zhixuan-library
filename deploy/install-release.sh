@@ -4,6 +4,15 @@ set -euo pipefail
 APP_DIR="/opt/zhixuan-library"
 STAGING_DIR="/tmp"
 
+if docker compose version >/dev/null 2>&1; then
+  compose=(docker compose)
+elif docker-compose version >/dev/null 2>&1; then
+  compose=(docker-compose)
+else
+  echo "服务器缺少 Docker Compose。" >&2
+  exit 1
+fi
+
 required=(
   "zhixuan-library-image.tar"
   "zhixuan-library.db"
@@ -43,7 +52,7 @@ chown -R 1000:1000 "${APP_DIR}/data"
 chmod -R a+rX "${APP_DIR}/novels" "${APP_DIR}/covers"
 
 docker load --input "${STAGING_DIR}/zhixuan-library-image.tar"
-docker compose --project-directory "${APP_DIR}" -f "${APP_DIR}/compose.production.yml" up -d
+"${compose[@]}" --project-directory "${APP_DIR}" -f "${APP_DIR}/compose.production.yml" up -d
 
 if [[ ! -f "/etc/nginx/sites-available/library.aivideoart.cn" ]]; then
   install -m 0644 "${STAGING_DIR}/nginx-library.conf" "/etc/nginx/sites-available/library.aivideoart.cn"
@@ -71,6 +80,6 @@ for attempt in {1..20}; do
   sleep 3
 done
 
-docker compose --project-directory "${APP_DIR}" -f "${APP_DIR}/compose.production.yml" logs --tail 100
+"${compose[@]}" --project-directory "${APP_DIR}" -f "${APP_DIR}/compose.production.yml" logs --tail 100
 echo "容器未在预期时间内通过健康检查。" >&2
 exit 1

@@ -1,3 +1,5 @@
+version: "2.4"
+
 services:
   library:
     image: zhixuan-library:latest
@@ -29,4 +31,3 @@ services:
     cpus: 1.0
     security_opt:
       - no-new-privileges:true
-
