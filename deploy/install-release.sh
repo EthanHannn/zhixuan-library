@@ -48,8 +48,9 @@ if [[ ! -f "${APP_DIR}/.novels-score-7.5-imported" ]]; then
 fi
 
 tar -xzf "${STAGING_DIR}/zhixuan-covers.tar.gz" -C "${APP_DIR}/covers"
-chown -R 1000:1000 "${APP_DIR}/data"
-chmod -R a+rX "${APP_DIR}/novels" "${APP_DIR}/covers"
+chown -R 1000:1000 "${APP_DIR}/data" "${APP_DIR}/covers"
+chmod -R a+rX "${APP_DIR}/novels"
+chmod -R u+rwX,go+rX "${APP_DIR}/covers"
 
 docker load --input "${STAGING_DIR}/zhixuan-library-image.tar"
 "${compose[@]}" --project-directory "${APP_DIR}" -f "${APP_DIR}/compose.production.yml" up -d

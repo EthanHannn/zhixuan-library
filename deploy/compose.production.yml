@@ -1,5 +1,3 @@
-version: "2.4"
-
 services:
   library:
     image: zhixuan-library:latest
@@ -16,7 +14,8 @@ services:
     volumes:
       - ./data:/app/data
       - ./novels:/data/novels:ro
-      - ./covers:/app/public/covers:ro
+      # 封面目录需要可写，以便阅读时低频补全真实封面；正文仍保持只读。
+      - ./covers:/app/public/covers
     healthcheck:
       test:
         - CMD

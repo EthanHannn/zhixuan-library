@@ -6,7 +6,7 @@
 - `.env.production`：生产环境变量，禁止提交 Git。
 - `data/library.db`：可写 SQLite 数据库。
 - `novels/`：只读挂载的评分不低于 7.5 的正文。
-- `covers/`：只读封面。
+- `covers/`：容器内 `node` 用户可写；用于保存阅读时低频补全的真实封面。
 - `nginx-library.conf`：签发证书前使用的 HTTP / ACME 反向代理模板。
 - `nginx-library-https.conf`：证书就绪后使用的 HTTPS 与强制跳转模板。
 

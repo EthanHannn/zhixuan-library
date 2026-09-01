@@ -8,6 +8,7 @@ export interface BookSummary {
   xiancaoCount: number;
   ducaoCount: number;
   size: string;
+  intro: string;
   popularity: number;
   hasContent: boolean;
   chapterCount: number;

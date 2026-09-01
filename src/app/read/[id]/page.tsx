@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useReaderTts } from "@/hooks/useReaderTts";
 
 interface ChapterInfo {
   idx: number;
@@ -131,6 +132,7 @@ export default function ReaderPage() {
   const [currentIdx, setCurrentIdx] = useState(1);
   const [tocOpen, setTocOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [ttsOpen, setTtsOpen] = useState(false);
   const [fontSize, setFontSize] = useState(20);
   const [theme, setTheme] = useState<(typeof THEMES)[number]>(THEMES[0]);
   const [colorize, setColorize] = useState(true);
@@ -138,7 +140,11 @@ export default function ReaderPage() {
   const [shelfLoading, setShelfLoading] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const paragraphRefs = useRef<Array<HTMLParagraphElement | null>>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const paragraphs = useMemo(() => content ? content.content.split(/\r?\n{2,}/).map((paragraph) => paragraph.replace(/\r?\n/g, "")).filter((paragraph) => paragraph.trim().length > 0) : [], [content]);
+  const tts = useReaderTts(paragraphs);
+  const stopTts = tts.stop;
 
   // 初始化主题与字号
   useEffect(() => {
@@ -156,6 +162,11 @@ export default function ReaderPage() {
       .then((data) => setInBookshelf(!!data?.inBookshelf))
       .catch(() => undefined);
   }, [bookId, session?.user]);
+
+  useEffect(() => {
+    if (!book?.hasContent) return;
+    fetch(`/api/books/${bookId}/cover`, { method: "POST" }).catch(() => undefined);
+  }, [book?.hasContent, bookId]);
 
   // 加载书籍与目录
   useEffect(() => {
@@ -221,8 +232,11 @@ export default function ReaderPage() {
 
   // 章节变化时加载
   useEffect(() => {
-    if (currentIdx >= 1 && book?.hasContent) loadChapter(currentIdx);
-  }, [currentIdx, book?.hasContent, loadChapter]);
+    if (currentIdx >= 1 && book?.hasContent) {
+      stopTts();
+      loadChapter(currentIdx);
+    }
+  }, [currentIdx, book?.hasContent, loadChapter, stopTts]);
 
   // 保存进度（滚动节流 + 章节切换）
   const saveProgress = useCallback((idx: number, percent: number) => {
@@ -291,16 +305,34 @@ export default function ReaderPage() {
   // 键盘导航
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") setCurrentIdx((i) => Math.max(1, i - 1));
+      const target = e.target as HTMLElement | null;
+      const isEditing = target?.matches("input, textarea, select, button, [contenteditable='true']");
+      if (isEditing) return;
+      if (tts.status !== "idle" && e.key === " ") {
+        e.preventDefault();
+        tts.toggle();
+      } else if (tts.status !== "idle" && e.key === "ArrowLeft") {
+        e.preventDefault();
+        tts.previous();
+      } else if (tts.status !== "idle" && e.key === "ArrowRight") {
+        e.preventDefault();
+        tts.next();
+      } else if (e.key === "ArrowLeft") setCurrentIdx((i) => Math.max(1, i - 1));
       else if (e.key === "ArrowRight") setCurrentIdx((i) => Math.min(book?.chapterCount || i, i + 1));
       else if (e.key === "Escape") {
         setTocOpen(false);
         setPaletteOpen(false);
+        setTtsOpen(false);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [book?.chapterCount]);
+  }, [book?.chapterCount, tts]);
+
+  useEffect(() => {
+    if (tts.status === "idle") return;
+    paragraphRefs.current[tts.currentIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [tts.currentIndex, tts.status]);
 
   const changeFontSize = (delta: number) => {
     setFontSize((s) => {
@@ -338,6 +370,16 @@ export default function ReaderPage() {
     }
   };
 
+  const firstVisibleParagraph = () => {
+    const viewportTop = 64;
+    const index = paragraphRefs.current.findIndex((paragraph) => paragraph && paragraph.getBoundingClientRect().bottom > viewportTop);
+    return index >= 0 ? index : 0;
+  };
+
+  const toggleTtsPlayback = () => {
+    tts.toggle(tts.status === "idle" ? firstVisibleParagraph() : tts.currentIndex);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: theme.shell, color: theme.text }}>
@@ -357,7 +399,6 @@ export default function ReaderPage() {
     );
   }
 
-  const paragraphs = content ? content.content.split(/\r?\n{2,}/).map((p) => p.replace(/\r?\n/g, "")).filter((p) => p.trim().length > 0) : [];
   const total = book.chapterCount;
   const chapterProgress = total > 0 ? (currentIdx / total) * 100 : 0;
   const readerStyle = {
@@ -374,8 +415,18 @@ export default function ReaderPage() {
         className="fixed top-0 left-0 right-0 z-30 border-b flex items-center gap-1 px-2 sm:gap-2 sm:px-5 h-14 backdrop-blur-xl"
         style={{ background: theme.chrome, borderColor: theme.border }}
       >
+        <Link href="/" className="flex size-8 shrink-0 items-center justify-center rounded-lg font-serif text-sm font-bold text-white shadow-sm transition-transform hover:-rotate-3" style={{ background: theme.accent }} title="返回知轩书房首页" aria-label="返回知轩书房首页">知</Link>
         <Link href={`/book/${bookId}`} className="shrink-0 rounded-full px-2.5 py-1.5 text-sm transition-opacity hover:opacity-65">← <span className="hidden sm:inline">详情</span></Link>
         <Link href={`/book/${bookId}`} className="min-w-0 flex-1 truncate text-center text-sm font-bold transition-opacity hover:opacity-65 sm:text-base" style={{ color: theme.title }} title="返回小说详情">{book.title}</Link>
+        <button
+          type="button"
+          onClick={() => { setTtsOpen((open) => !open); setPaletteOpen(false); setTocOpen(false); }}
+          disabled={!tts.supported}
+          className="shrink-0 rounded-full border px-2 py-1.5 text-xs font-bold transition-opacity hover:opacity-75 disabled:cursor-not-allowed disabled:opacity-35 sm:px-3 sm:text-sm"
+          style={{ borderColor: tts.status !== "idle" ? theme.accent : theme.border, background: tts.status !== "idle" ? theme.accentSoft : theme.paper, color: theme.accent }}
+          aria-expanded={ttsOpen}
+          title={tts.supported ? "语音朗读" : "当前浏览器不支持语音朗读"}
+        ><span aria-hidden="true">{tts.status === "playing" ? "◼︎" : "🔊"}</span><span className="hidden lg:inline"> 朗读</span></button>
         <button
           type="button"
           onClick={toggleBookshelf}
@@ -386,7 +437,7 @@ export default function ReaderPage() {
         >{shelfLoading ? "…" : inBookshelf ? "✓ 已加" : "+ 书架"}</button>
         <button
           type="button"
-          onClick={() => { setTocOpen(!tocOpen); setPaletteOpen(false); }}
+          onClick={() => { setTocOpen(!tocOpen); setPaletteOpen(false); setTtsOpen(false); }}
           className="shrink-0 rounded-full border px-3 py-1.5 text-sm transition-opacity hover:opacity-70"
           style={{ borderColor: theme.border, background: theme.paper }}
           title="打开目录"
@@ -395,7 +446,7 @@ export default function ReaderPage() {
         <button type="button" onClick={() => changeFontSize(2)} className="hidden md:block shrink-0 rounded-full px-2 py-1.5 text-sm hover:opacity-70" title="增大字号">A＋</button>
         <button
           type="button"
-          onClick={() => { setPaletteOpen(!paletteOpen); setTocOpen(false); }}
+          onClick={() => { setPaletteOpen(!paletteOpen); setTocOpen(false); setTtsOpen(false); }}
           className="shrink-0 flex items-center gap-2 rounded-full border px-2.5 sm:px-3 py-1.5 text-sm transition-opacity hover:opacity-75"
           style={{ borderColor: theme.border, background: theme.accentSoft, color: theme.accent }}
           aria-expanded={paletteOpen}
@@ -497,6 +548,43 @@ export default function ReaderPage() {
         </>
       )}
 
+      {/* 语音朗读工具条：借鉴 ColorTxt 的分段排播与快捷控制，使用浏览器本地语音。 */}
+      {ttsOpen && (
+        <section
+          className="fixed bottom-3 left-1/2 z-50 w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 rounded-3xl border p-4 shadow-2xl backdrop-blur-xl sm:p-5"
+          style={{ background: theme.chrome, borderColor: theme.border, boxShadow: theme.shadow }}
+          aria-label="语音朗读控制"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-bold" style={{ color: theme.title }}>语音朗读</h2>
+              <p className="mt-1 text-xs" style={{ color: theme.muted }}>{tts.status === "idle" ? "从当前视口第一段开始" : `正在定位第 ${tts.currentIndex + 1} / ${paragraphs.length} 段`} · 空格播放/暂停，左右键切换段落</p>
+            </div>
+            <button type="button" onClick={() => setTtsOpen(false)} className="rounded-full px-2 py-1 hover:opacity-60" aria-label="收起语音朗读控制">✕</button>
+          </div>
+
+          <div className="mt-4 flex items-center justify-center gap-2 sm:gap-3">
+            <button type="button" onClick={tts.previous} className="rounded-full border px-3 py-2 text-sm hover:opacity-70" style={{ borderColor: theme.border, color: theme.accent }} aria-label="朗读上一段">← 上一段</button>
+            <button type="button" onClick={toggleTtsPlayback} className="min-w-24 rounded-full px-5 py-2.5 text-sm font-bold text-white shadow" style={{ background: theme.accent }}>{tts.status === "playing" ? "暂停" : tts.status === "paused" ? "继续" : "开始朗读"}</button>
+            <button type="button" onClick={tts.stop} disabled={tts.status === "idle"} className="rounded-full border px-3 py-2 text-sm hover:opacity-70 disabled:opacity-35" style={{ borderColor: theme.border, color: theme.muted }}>停止</button>
+            <button type="button" onClick={tts.next} className="rounded-full border px-3 py-2 text-sm hover:opacity-70" style={{ borderColor: theme.border, color: theme.accent }} aria-label="朗读下一段">下一段 →</button>
+          </div>
+
+          <div className="mt-4 grid gap-3 border-t pt-4 sm:grid-cols-[minmax(0,1fr)_220px]" style={{ borderColor: theme.border }}>
+            <label className="min-w-0 text-xs font-medium" style={{ color: theme.muted }}>
+              音色
+              <select value={tts.voiceURI} onChange={(event) => tts.setVoiceURI(event.target.value)} className="mt-1.5 w-full rounded-xl border px-3 py-2 text-sm outline-none" style={{ borderColor: theme.border, background: theme.paper, color: theme.text }}>
+                {tts.voices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} · {voice.lang}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-medium" style={{ color: theme.muted }}>
+              语速 <span className="float-right tabular-nums" style={{ color: theme.accent }}>{tts.rate.toFixed(1)}×</span>
+              <input type="range" min="0.6" max="2" step="0.1" value={tts.rate} onChange={(event) => tts.setRate(Number(event.target.value))} className="mt-3 w-full accent-current" style={{ color: theme.accent }} />
+            </label>
+          </div>
+        </section>
+      )}
+
       {/* 目录抽屉 */}
       {tocOpen && (
         <div className="fixed inset-0 z-40 flex">
@@ -542,7 +630,12 @@ export default function ReaderPage() {
               <div className="mb-3 text-center text-xs tracking-[0.22em]" style={{ color: theme.muted }}>第 {content.idx} / {content.total} 章</div>
               <h1 className="text-center font-bold mb-10 leading-snug" style={{ color: theme.title, fontSize: fontSize + 7 }}>{content.title}</h1>
               {paragraphs.map((p, i) => (
-                <p key={i} className="mb-5 leading-[2.05]" style={{ textIndent: "2em" }}>
+                <p
+                  key={i}
+                  ref={(node) => { paragraphRefs.current[i] = node; }}
+                  className="mb-5 scroll-mt-24 rounded-lg px-1 leading-[2.05] transition-colors duration-300"
+                  style={{ textIndent: "2em", background: tts.status !== "idle" && tts.currentIndex === i ? theme.accentSoft : "transparent", boxShadow: tts.status !== "idle" && tts.currentIndex === i ? `0 0 0 4px ${theme.accentSoft}` : "none" }}
+                >
                   {colorize ? colorizeText(p, theme) : p}
                 </p>
               ))}

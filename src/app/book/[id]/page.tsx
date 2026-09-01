@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { BookCover } from "@/components/BookCover";
+import { BookCard } from "@/components/BookCard";
 import { SiteHeader } from "@/components/SiteHeader";
 import { formatReadingPosition, formatWordCount } from "@/lib/format";
+import type { BookSummary } from "@/types/catalog";
 
 interface Book {
   id: number;
@@ -51,6 +53,7 @@ export default function BookDetailPage() {
   const { data: session } = useSession();
   const [book, setBook] = useState<Book | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [recommendations, setRecommendations] = useState<BookSummary[]>([]);
   const [userVote, setUserVote] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ chapterIdx: number; percent: number } | null>(null);
   const [inBookshelf, setInBookshelf] = useState(false);
@@ -74,6 +77,11 @@ export default function BookDetailPage() {
     if (response.ok) setComments((await response.json()).comments || []);
   }, [id]);
 
+  const fetchRecommendations = useCallback(async () => {
+    const response = await fetch(`/api/books/${id}/similar?limit=6`, { cache: "no-store" });
+    if (response.ok) setRecommendations((await response.json()).books || []);
+  }, [id]);
+
   const fetchPersonalState = useCallback(async () => {
     const [voteResponse, progressResponse, shelfResponse] = await Promise.all([
       fetch(`/api/votes?bookId=${id}`),
@@ -92,10 +100,11 @@ export default function BookDetailPage() {
     if (!id) return;
     fetchBook();
     fetchComments();
+    fetchRecommendations();
     if (session) {
       fetchPersonalState();
     }
-  }, [fetchBook, fetchComments, fetchPersonalState, id, session]);
+  }, [fetchBook, fetchComments, fetchPersonalState, fetchRecommendations, id, session]);
 
   const handleShelf = async () => {
     if (!session || !book) return;
@@ -216,6 +225,22 @@ export default function BookDetailPage() {
             </section>
           </aside>
         </div>
+
+        {recommendations.length > 0 && (
+          <section className="mt-12 border-t border-[#d9cfbf] pt-10 lg:mt-16 lg:pt-12">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold tracking-[0.25em] text-[#9b4b35]">YOU MAY ALSO LIKE</p>
+                <h2 className="mt-2 font-serif text-3xl font-bold text-[#263e35]">读完这本，还可以读</h2>
+                <p className="mt-2 text-sm font-medium text-[#6d665c]">综合题材、作者、篇幅与评分随机推荐</p>
+              </div>
+              <button type="button" onClick={fetchRecommendations} className="w-fit rounded-full border border-[#b9ab97] px-4 py-2 text-sm font-semibold text-[#3c574c] transition hover:border-[#315f50] hover:bg-[#315f50] hover:text-white">换一批</button>
+            </div>
+            <div className="mt-7 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {recommendations.map((recommendation) => <BookCard key={recommendation.id} book={recommendation} />)}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

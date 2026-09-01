@@ -73,11 +73,13 @@ async function main() {
     const home = await request("/");
     const api = await request("/api/books");
     const cover = await request("/covers/real/1.jpg");
+    const lazyCoverApi = await request("/api/books/1/cover", { method: "POST" });
 
     assert(login.status === 200, `登录页状态异常: ${login.status}`);
     assert(home.status >= 300 && home.status < 400, `未登录首页没有跳转: ${home.status}`);
     assert(api.status === 401, `未登录 API 没有返回 401: ${api.status}`);
     assert(cover.status >= 300 && cover.status < 400, `未登录封面没有被保护: ${cover.status}`);
+    assert(lazyCoverApi.status === 401, `未登录懒封面接口没有返回 401: ${lazyCoverApi.status}`);
 
     const csrfResponse = await request("/api/auth/csrf");
     const { csrfToken } = await csrfResponse.json();
@@ -101,6 +103,10 @@ async function main() {
     const sampleCategory = categoryData.categories?.[0]?.name;
     const categoryFilterResponse = await request(`/api/books?limit=5&onlyContent=1&tag1=${encodeURIComponent(sampleCategory || "")}`);
     const categoryFilterData = await categoryFilterResponse.json();
+    const similarResponse = await request(`/api/books/${sampleBook.id}/similar?limit=3`);
+    const similarData = await similarResponse.json();
+    const detailPage = await request(`/book/${sampleBook.id}`);
+    const readerPage = await request(`/read/${sampleBook.id}`);
     assert(authenticatedHome.status === 200, `登录后首页不可访问: ${authenticatedHome.status}`);
     assert(categoriesResponse.status === 200, `登录后分类 API 不可访问: ${categoriesResponse.status}`);
     assert(booksResponse.status === 200 && sampleBook, "登录后无法取得书库样例");
@@ -112,6 +118,10 @@ async function main() {
     assert(wordFilterData.books.every((book) => book.wordCount >= 1 && book.wordCount <= 1000000), "篇幅筛选返回了范围外作品");
     assert(wordFilterData.books.every((book, index, books) => index === 0 || books[index - 1].wordCount >= book.wordCount), "字数排序不正确");
     assert(categoryFilterResponse.status === 200 && categoryFilterData.books?.length && categoryFilterData.books.every((book) => book.tag1 === sampleCategory), "一级分类筛选不正确");
+    assert(similarResponse.status === 200 && similarData.books?.length === 3, "相似作品推荐没有返回预期数量");
+    assert(similarData.books.every((book) => book.id !== sampleBook.id), "相似作品推荐包含当前作品");
+    assert(detailPage.status === 200, `作品详情页不可访问: ${detailPage.status}`);
+    assert(readerPage.status === 200, `阅读页不可访问: ${readerPage.status}`);
     assert(session.user?.username === username, "会话用户名不匹配");
     assert(session.user?.nickname === "老板", "会话昵称不匹配");
     assert(session.user?.role === "ADMIN", "会话角色不是 ADMIN");
@@ -166,6 +176,8 @@ async function main() {
       visibleBooks: categoryData.stats.books,
       libraryFilters: { categories: categoryData.categories.length, subcategories: categoryData.subcategories.length },
       advancedFilterRoundTrip: true,
+      similarRecommendations: similarData.books.length,
+      detailAndReaderPages: true,
       bookshelfRoundTrip: true,
       readingProgressRoundTrip: true,
       session: { username: session.user.username, nickname: session.user.nickname, role: session.user.role },
