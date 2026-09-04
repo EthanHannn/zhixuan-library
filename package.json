@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:auth": "node scripts/smoke-auth.js",
+    "test:covers": "tsx --test src/lib/cover-sources.test.ts",
     "seed:owner": "node scripts/seed-owner.js",
     "scrape:covers": "node scripts/scrape-covers.js",
     "import:manual": "node scripts/import-manual-books.js",

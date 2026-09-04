@@ -2,22 +2,22 @@ import "server-only";
 
 import { mkdir, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { prisma } from "@/lib/prisma";
 import { MIN_BOOK_SCORE } from "@/lib/catalog";
+import {
+  findDoubanCover,
+  findQidianCover,
+  findQqCover,
+  type CoverCandidate,
+  type CoverSourceName,
+} from "@/lib/cover-sources";
+import { prisma } from "@/lib/prisma";
 
 interface CoverQueueState {
   chain: Promise<void>;
   queued: Set<number>;
   completions: Map<number, Promise<void>>;
   nextRequestAt: number;
-  blockedUntil: number;
-}
-
-interface CoverSuggestion {
-  id: string;
-  title?: string;
-  author_name?: string;
-  pic?: string;
+  sourceBlockedUntil: Partial<Record<CoverSourceName, number>>;
 }
 
 export type QueueResult = "queued" | "duplicate" | "busy" | "blocked";
@@ -25,6 +25,12 @@ export type QueueResult = "queued" | "duplicate" | "busy" | "blocked";
 interface CoverFetchRequest {
   status: QueueResult;
   completion: Promise<void> | null;
+}
+
+interface CoverBook {
+  id: number;
+  title: string;
+  author: string;
 }
 
 const globalForCoverQueue = globalThis as typeof globalThis & {
@@ -36,11 +42,12 @@ const queueState = globalForCoverQueue.zhixuanCoverQueue || {
   queued: new Set<number>(),
   completions: new Map<number, Promise<void>>(),
   nextRequestAt: 0,
-  blockedUntil: 0,
+  sourceBlockedUntil: {},
 };
 
-// Keep Fast Refresh compatible with queue state created before completions existed.
+// Keep Fast Refresh compatible with queue state created before these fields existed.
 queueState.completions ||= new Map<number, Promise<void>>();
+queueState.sourceBlockedUntil ||= {};
 
 globalForCoverQueue.zhixuanCoverQueue = queueState;
 
@@ -53,15 +60,22 @@ const MAX_PENDING_BOOKS = 20;
 const NOT_FOUND_COOLDOWN = 30 * 24 * 60 * 60 * 1000;
 const ERROR_COOLDOWN = 24 * 60 * 60 * 1000;
 const RATE_LIMIT_COOLDOWN = 6 * 60 * 60 * 1000;
+const COVER_SOURCES: CoverSourceName[] = ["qidian", "qq", "douban"];
 
-class CoverRateLimitError extends Error {}
+export const COVER_NOT_FOUND_SOURCE = "covers:not_found";
+export const COVER_ERROR_SOURCES = ["covers:error", "covers:rate_limited"] as const;
+
+class CoverRateLimitError extends Error {
+  constructor(
+    readonly source: CoverSourceName,
+    status: number,
+  ) {
+    super(`${source} 暂时限制访问：HTTP ${status}`);
+  }
+}
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-function normalize(value: string | null | undefined) {
-  return String(value || "").toLowerCase().replace(/[《》〈〉（）()\[\]【】·:：,，.。\s_-]/g, "");
 }
 
 function hasRealCover(coverPath: string | null) {
@@ -81,8 +95,8 @@ async function realCoverExists(coverPath: string | null) {
 }
 
 function cooldownFor(source: string | null) {
-  if (source === "douban:not_found") return NOT_FOUND_COOLDOWN;
-  if (source === "douban:error" || source === "douban:rate_limited") return ERROR_COOLDOWN;
+  if (source === COVER_NOT_FOUND_SOURCE) return NOT_FOUND_COOLDOWN;
+  if (COVER_ERROR_SOURCES.some((value) => value === source)) return ERROR_COOLDOWN;
   return 0;
 }
 
@@ -92,7 +106,8 @@ async function waitForRequestSlot() {
   queueState.nextRequestAt = Date.now() + 5_000 + Math.round(Math.random() * 3_000);
 }
 
-async function fetchWithTimeout(url: string, headers: Record<string, string> = {}) {
+async function fetchWithTimeout(source: CoverSourceName, url: string, headers: Record<string, string> = {}) {
+  await waitForRequestSlot();
   const response = await fetch(url, {
     headers: {
       "User-Agent": userAgent,
@@ -103,22 +118,9 @@ async function fetchWithTimeout(url: string, headers: Record<string, string> = {
     cache: "no-store",
   });
   if (response.status === 403 || response.status === 429) {
-    throw new CoverRateLimitError(`封面来源暂时限制访问：HTTP ${response.status}`);
+    throw new CoverRateLimitError(source, response.status);
   }
   return response;
-}
-
-function chooseSuggestion(title: string, author: string, suggestions: CoverSuggestion[]) {
-  const wantedTitle = normalize(title);
-  const wantedAuthor = normalize(author);
-  return suggestions.find((candidate) => {
-    if (!candidate.pic) return false;
-    const candidateTitle = normalize(candidate.title);
-    const candidateAuthor = normalize(candidate.author_name);
-    const titleMatches = candidateTitle === wantedTitle || candidateTitle.includes(wantedTitle) || wantedTitle.includes(candidateTitle);
-    const authorMatches = candidateAuthor && (candidateAuthor === wantedAuthor || candidateAuthor.includes(wantedAuthor) || wantedAuthor.includes(candidateAuthor));
-    return Boolean(titleMatches && authorMatches);
-  }) || null;
 }
 
 function imageExtension(contentType: string) {
@@ -128,11 +130,69 @@ function imageExtension(contentType: string) {
   return ".jpg";
 }
 
-async function markAttempt(bookId: number, source: "douban:not_found" | "douban:error" | "douban:rate_limited") {
+async function markAttempt(bookId: number, source: typeof COVER_NOT_FOUND_SOURCE | typeof COVER_ERROR_SOURCES[number]) {
   await prisma.book.update({
     where: { id: bookId },
     data: { coverSource: source, coverFetchedAt: new Date() },
   });
+}
+
+async function lookupCover(source: CoverSourceName, book: CoverBook) {
+  if (source === "qidian") {
+    const response = await fetchWithTimeout(
+      source,
+      `https://m.qidian.com/search?kw=${encodeURIComponent(book.title)}`,
+      { Accept: "text/html,application/xhtml+xml" },
+    );
+    if (!response.ok) throw new Error(`起点检索失败：HTTP ${response.status}`);
+    return findQidianCover(book, await response.text());
+  }
+
+  if (source === "qq") {
+    const response = await fetchWithTimeout(
+      source,
+      `https://book.qq.com/so/${encodeURIComponent(book.title)}`,
+      { Accept: "text/html,application/xhtml+xml" },
+    );
+    if (!response.ok) throw new Error(`QQ 阅读检索失败：HTTP ${response.status}`);
+    return findQqCover(book, await response.text());
+  }
+
+  const response = await fetchWithTimeout(
+    source,
+    `https://book.douban.com/j/subject_suggest?q=${encodeURIComponent(book.title)}`,
+  );
+  if (!response.ok) throw new Error(`豆瓣检索失败：HTTP ${response.status}`);
+  return findDoubanCover(book, await response.json());
+}
+
+async function saveCover(book: CoverBook, candidate: CoverCandidate) {
+  const imageResponse = await fetchWithTimeout(candidate.source, candidate.imageUrl, { Referer: candidate.referer });
+  if (!imageResponse.ok) throw new Error(`${candidate.source} 封面下载失败：HTTP ${imageResponse.status}`);
+  const contentType = imageResponse.headers.get("content-type") || "";
+  if (!contentType.startsWith("image/")) throw new Error(`${candidate.source} 封面响应不是图片`);
+  const bytes = Buffer.from(await imageResponse.arrayBuffer());
+  if (bytes.length < 1_024 || bytes.length > 10 * 1_024 * 1_024) throw new Error(`${candidate.source} 封面大小异常：${bytes.length}`);
+
+  await mkdir(realCoverRoot, { recursive: true });
+  const extension = imageExtension(contentType);
+  const fileName = `${book.id}${extension}`;
+  const temporaryPath = path.join(realCoverRoot, `${fileName}.${Date.now()}.tmp`);
+  const finalPath = path.join(realCoverRoot, fileName);
+  await writeFile(temporaryPath, bytes, { flag: "wx" });
+  await rename(temporaryPath, finalPath);
+
+  await prisma.book.update({
+    where: { id: book.id },
+    data: {
+      coverPath: `/covers/real/${fileName}`,
+      coverSource: `${candidate.source}:${candidate.id}`,
+      coverSourceUrl: candidate.imageUrl,
+      coverFetchedAt: new Date(),
+    },
+  });
+
+  console.info(`[cover-fetch] 已保存封面：${book.title} -> /covers/real/${fileName} (${candidate.source})`);
 }
 
 async function fetchBookCover(bookId: number) {
@@ -157,60 +217,47 @@ async function fetchBookCover(bookId: number) {
   const cooldown = cooldownFor(book.coverSource);
   if (book.coverFetchedAt && cooldown > 0 && Date.now() - book.coverFetchedAt.getTime() < cooldown) return;
 
-  await waitForRequestSlot();
+  let hadError = false;
+  let hadRateLimit = false;
 
-  try {
-    const suggestionResponse = await fetchWithTimeout(`https://book.douban.com/j/subject_suggest?q=${encodeURIComponent(book.title)}`);
-    if (!suggestionResponse.ok) throw new Error(`封面检索失败：HTTP ${suggestionResponse.status}`);
-    const suggestions = await suggestionResponse.json() as CoverSuggestion[];
-    const suggestion = chooseSuggestion(book.title, book.author, suggestions);
-
-    if (!suggestion?.pic) {
-      await markAttempt(book.id, "douban:not_found");
-      console.info(`[cover-fetch] 未匹配到封面：${book.title} / ${book.author}`);
-      return;
+  for (const source of COVER_SOURCES) {
+    if ((queueState.sourceBlockedUntil[source] || 0) > Date.now()) {
+      hadRateLimit = true;
+      continue;
     }
 
-    await sleep(900 + Math.round(Math.random() * 600));
-    const imageResponse = await fetchWithTimeout(suggestion.pic, { Referer: "https://book.douban.com/" });
-    if (!imageResponse.ok) throw new Error(`封面下载失败：HTTP ${imageResponse.status}`);
-    const contentType = imageResponse.headers.get("content-type") || "";
-    if (!contentType.startsWith("image/")) throw new Error("封面响应不是图片");
-    const bytes = Buffer.from(await imageResponse.arrayBuffer());
-    if (bytes.length < 1_024 || bytes.length > 10 * 1_024 * 1_024) throw new Error(`封面大小异常：${bytes.length}`);
-
-    await mkdir(realCoverRoot, { recursive: true });
-    const extension = imageExtension(contentType);
-    const fileName = `${book.id}${extension}`;
-    const temporaryPath = path.join(realCoverRoot, `${fileName}.${Date.now()}.tmp`);
-    const finalPath = path.join(realCoverRoot, fileName);
-    await writeFile(temporaryPath, bytes, { flag: "wx" });
-    await rename(temporaryPath, finalPath);
-
-    await prisma.book.update({
-      where: { id: book.id },
-      data: {
-        coverPath: `/covers/real/${fileName}`,
-        coverSource: `douban:${suggestion.id}`,
-        coverSourceUrl: suggestion.pic,
-        coverFetchedAt: new Date(),
-      },
-    });
-    console.info(`[cover-fetch] 已保存封面：${book.title} -> /covers/real/${fileName}`);
-  } catch (error) {
-    if (error instanceof CoverRateLimitError) {
-      queueState.blockedUntil = Date.now() + RATE_LIMIT_COOLDOWN;
-      await markAttempt(book.id, "douban:rate_limited");
-      console.warn(`[cover-fetch] ${error.message}，暂停后台抓取 6 小时。`);
+    try {
+      const candidate = await lookupCover(source, book);
+      if (!candidate) continue;
+      await saveCover(book, candidate);
       return;
+    } catch (error) {
+      if (error instanceof CoverRateLimitError) {
+        hadRateLimit = true;
+        queueState.sourceBlockedUntil[source] = Date.now() + RATE_LIMIT_COOLDOWN;
+        console.warn(`[cover-fetch] ${error.message}，暂停该来源 6 小时并尝试后备来源。`);
+        continue;
+      }
+      hadError = true;
+      console.warn(`[cover-fetch] ${book.title} (${source}):`, error);
     }
-    await markAttempt(book.id, "douban:error");
-    console.warn(`[cover-fetch] ${book.title}:`, error);
   }
+
+  const attemptSource = hadError
+    ? "covers:error"
+    : hadRateLimit
+      ? "covers:rate_limited"
+      : COVER_NOT_FOUND_SOURCE;
+  await markAttempt(book.id, attemptSource);
+  console.info(`[cover-fetch] 未取得封面 (${attemptSource})：${book.title} / ${book.author}`);
+}
+
+function allSourcesBlocked() {
+  return COVER_SOURCES.every((source) => (queueState.sourceBlockedUntil[source] || 0) > Date.now());
 }
 
 export function queueBookCoverFetch(bookId: number): CoverFetchRequest {
-  if (queueState.blockedUntil > Date.now()) return { status: "blocked", completion: null };
+  if (allSourcesBlocked()) return { status: "blocked", completion: null };
   if (queueState.queued.has(bookId)) {
     return { status: "duplicate", completion: queueState.completions.get(bookId) || null };
   }

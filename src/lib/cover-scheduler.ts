@@ -2,7 +2,12 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { MIN_BOOK_SCORE } from "@/lib/catalog";
-import { queueBookCoverFetch, type QueueResult } from "@/lib/cover-fetcher";
+import {
+  COVER_ERROR_SOURCES,
+  COVER_NOT_FOUND_SOURCE,
+  queueBookCoverFetch,
+  type QueueResult,
+} from "@/lib/cover-fetcher";
 
 interface CoverBackfillState {
   started: boolean;
@@ -76,12 +81,14 @@ async function findNextCandidate() {
           OR: [
             { coverFetchedAt: null },
             { coverSource: null },
+            // Retry legacy Douban-only failures immediately now that more sources exist.
+            { coverSource: { in: ["douban:not_found", "douban:error", "douban:rate_limited"] } },
             {
-              coverSource: "douban:not_found",
+              coverSource: COVER_NOT_FOUND_SOURCE,
               coverFetchedAt: { lte: new Date(now - NOT_FOUND_COOLDOWN_MS) },
             },
             {
-              coverSource: { in: ["douban:error", "douban:rate_limited"] },
+              coverSource: { in: [...COVER_ERROR_SOURCES] },
               coverFetchedAt: { lte: new Date(now - ERROR_COOLDOWN_MS) },
             },
           ],
