@@ -6,8 +6,10 @@
 - `.env.production`：生产环境变量，禁止提交 Git。
 - `data/library.db`：可写 SQLite 数据库。
 - `novels/`：只读挂载的评分不低于 7.5 的正文。
-- `covers/`：容器内 `node` 用户可写；用于保存阅读时低频补全的真实封面。
+- `covers/`：容器内 `node` 用户可写；用于保存生产服务定时补全及阅读时即时补全的真实封面。
 - `nginx-library.conf`：签发证书前使用的 HTTP / ACME 反向代理模板。
 - `nginx-library-https.conf`：证书就绪后使用的 HTTPS 与强制跳转模板。
 
 镜像必须在本地或 CI 构建为 `linux/amd64`，服务器只负责加载镜像和启动容器。
+
+生产环境默认每约 90 秒自动处理一本待补封面的作品，并优先处理仙草数较高的作品。可在 `.env.production` 中用 `COVER_AUTO_FETCH`、`COVER_AUTO_FETCH_INTERVAL_SECONDS` 和 `COVER_AUTO_FETCH_INITIAL_DELAY_SECONDS` 控制开关与频率；任务保持单并发，来源未匹配、普通错误和限流均有冷却保护。部署后可通过 `/api/health` 的 `coverBackfill` 字段确认调度器状态。

@@ -20,7 +20,7 @@ interface CoverSuggestion {
   pic?: string;
 }
 
-type QueueResult = "queued" | "duplicate" | "busy" | "blocked";
+export type QueueResult = "queued" | "duplicate" | "busy" | "blocked";
 
 interface CoverFetchRequest {
   status: QueueResult;
@@ -167,6 +167,7 @@ async function fetchBookCover(bookId: number) {
 
     if (!suggestion?.pic) {
       await markAttempt(book.id, "douban:not_found");
+      console.info(`[cover-fetch] 未匹配到封面：${book.title} / ${book.author}`);
       return;
     }
 
@@ -195,6 +196,7 @@ async function fetchBookCover(bookId: number) {
         coverFetchedAt: new Date(),
       },
     });
+    console.info(`[cover-fetch] 已保存封面：${book.title} -> /covers/real/${fileName}`);
   } catch (error) {
     if (error instanceof CoverRateLimitError) {
       queueState.blockedUntil = Date.now() + RATE_LIMIT_COOLDOWN;
