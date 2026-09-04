@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { queueBookCoverFetch } from "@/lib/cover-fetcher";
 
 export async function POST(
@@ -11,7 +11,9 @@ export async function POST(
     return NextResponse.json({ error: "无效的书籍ID" }, { status: 400 });
   }
 
-  const status = queueBookCoverFetch(bookId);
+  const { status, completion } = queueBookCoverFetch(bookId);
+  if (completion) after(() => completion);
+
   return NextResponse.json(
     { status },
     { status: status === "busy" ? 503 : 202, headers: { "Cache-Control": "no-store" } },

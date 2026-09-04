@@ -31,6 +31,18 @@ interface ReadingEntry {
 }
 
 const EMPTY_STATS: CatalogStats = { books: 0, authors: 0, categories: 0, minScore: 7.5 };
+const HERO_BOOK_COUNT = 5;
+
+function sampleBooks(books: BookSummary[], count: number) {
+  const shuffled = [...books];
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+  }
+
+  return shuffled.slice(0, count);
+}
 
 export default function Home() {
   const { data: session } = useSession();
@@ -44,13 +56,13 @@ export default function Home() {
   useEffect(() => {
     Promise.all([
       fetch("/api/categories").then((response) => response.json()),
-      fetch("/api/books?limit=5&onlyContent=1&sortBy=popularity").then((response) => response.json()),
+      fetch("/api/books?limit=30&onlyContent=1&sortBy=xiancao", { cache: "no-store" }).then((response) => response.json()),
       fetch("/api/books?limit=6&onlyContent=1&sortBy=score").then((response) => response.json()),
       fetch("/api/books?limit=6&onlyContent=1&sortBy=latest").then((response) => response.json()),
       fetch("/api/progress").then((response) => response.ok ? response.json() : { progress: [] }),
     ]).then(([categoryData, bannerData, featuredData, latestData, progressData]) => {
       setStats(categoryData.stats || EMPTY_STATS);
-      setBanners(bannerData.books || []);
+      setBanners(sampleBooks(bannerData.books || [], HERO_BOOK_COUNT));
       setFeatured(featuredData.books || []);
       setLatest(latestData.books || []);
       setReading((progressData.progress || []).slice(0, 3));

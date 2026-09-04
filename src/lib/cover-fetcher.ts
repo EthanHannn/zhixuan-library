@@ -8,6 +8,7 @@ import { MIN_BOOK_SCORE } from "@/lib/catalog";
 interface CoverQueueState {
   chain: Promise<void>;
   queued: Set<number>;
+  completions: Map<number, Promise<void>>;
   nextRequestAt: number;
   blockedUntil: number;
 }
@@ -21,6 +22,11 @@ interface CoverSuggestion {
 
 type QueueResult = "queued" | "duplicate" | "busy" | "blocked";
 
+interface CoverFetchRequest {
+  status: QueueResult;
+  completion: Promise<void> | null;
+}
+
 const globalForCoverQueue = globalThis as typeof globalThis & {
   zhixuanCoverQueue?: CoverQueueState;
 };
@@ -28,9 +34,13 @@ const globalForCoverQueue = globalThis as typeof globalThis & {
 const queueState = globalForCoverQueue.zhixuanCoverQueue || {
   chain: Promise.resolve(),
   queued: new Set<number>(),
+  completions: new Map<number, Promise<void>>(),
   nextRequestAt: 0,
   blockedUntil: 0,
 };
+
+// Keep Fast Refresh compatible with queue state created before completions existed.
+queueState.completions ||= new Map<number, Promise<void>>();
 
 globalForCoverQueue.zhixuanCoverQueue = queueState;
 
@@ -197,16 +207,24 @@ async function fetchBookCover(bookId: number) {
   }
 }
 
-export function queueBookCoverFetch(bookId: number): QueueResult {
-  if (queueState.blockedUntil > Date.now()) return "blocked";
-  if (queueState.queued.has(bookId)) return "duplicate";
-  if (queueState.queued.size >= MAX_PENDING_BOOKS) return "busy";
+export function queueBookCoverFetch(bookId: number): CoverFetchRequest {
+  if (queueState.blockedUntil > Date.now()) return { status: "blocked", completion: null };
+  if (queueState.queued.has(bookId)) {
+    return { status: "duplicate", completion: queueState.completions.get(bookId) || null };
+  }
+  if (queueState.queued.size >= MAX_PENDING_BOOKS) return { status: "busy", completion: null };
 
   queueState.queued.add(bookId);
-  queueState.chain = queueState.chain
+  const completion = queueState.chain
     .catch(() => undefined)
     .then(() => fetchBookCover(bookId))
     .catch((error) => console.warn(`[cover-fetch] 书籍 ${bookId} 后台任务失败:`, error))
-    .finally(() => queueState.queued.delete(bookId));
-  return "queued";
+    .finally(() => {
+      queueState.queued.delete(bookId);
+      queueState.completions.delete(bookId);
+    });
+
+  queueState.completions.set(bookId, completion);
+  queueState.chain = completion;
+  return { status: "queued", completion };
 }

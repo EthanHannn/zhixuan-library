@@ -64,7 +64,7 @@ export function FeaturedCarousel({ books, nickname, stats }: FeaturedCarouselPro
           <div className="min-w-0">
             <div className="flex items-center gap-3 text-xs font-bold tracking-[0.28em] text-[#f4c9a6]">
               <span className="h-px w-8 bg-current" />
-              EDITOR&apos;S CHOICE · 精品推荐
+              READERS&apos; CHOICE · 仙草高票随机推荐
             </div>
             {current ? (
               <div key={current.id} className="animate-[fade-in_.45s_ease-out]">
@@ -74,7 +74,8 @@ export function FeaturedCarousel({ books, nickname, stats }: FeaturedCarouselPro
                 <div className="mt-7 flex flex-wrap items-center gap-3">
                   <Link href={`/read/${current.id}`} className="rounded-xl bg-[#f4d6ac] px-6 py-3 text-sm font-bold text-[#29443a] shadow-xl shadow-black/15 transition hover:-translate-y-0.5 hover:bg-white">立即阅读</Link>
                   <Link href={`/book/${current.id}`} className="rounded-xl border border-white/35 bg-white/10 px-6 py-3 text-sm font-bold text-white backdrop-blur transition hover:bg-white/20">查看详情</Link>
-                  <span className="ml-1 rounded-full bg-black/15 px-3 py-1.5 font-serif text-lg font-bold text-[#ffe0b9]">{current.score.toFixed(1)} 分</span>
+                  <span className="ml-1 rounded-full bg-black/15 px-3 py-1.5 text-sm font-bold text-[#ffe0b9]">🌟 {current.xiancaoCount.toLocaleString("zh-CN")} 票仙草</span>
+                  <span className="rounded-full bg-black/15 px-3 py-1.5 font-serif text-lg font-bold text-[#ffe0b9]">{current.score.toFixed(1)} 分</span>
                 </div>
               </div>
             ) : (
