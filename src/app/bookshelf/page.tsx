@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-fetch";
+
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { BookCover } from "@/components/BookCover";
@@ -58,7 +60,7 @@ export default function BookshelfPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [shelfResponse, progressResponse] = await Promise.all([fetch("/api/bookshelf"), fetch("/api/progress")]);
+      const [shelfResponse, progressResponse] = await Promise.all([apiFetch("/api/bookshelf"), apiFetch("/api/progress")]);
       const [shelfData, progressData] = await Promise.all([shelfResponse.json(), progressResponse.json()]);
       setEntries(shelfData.entries || []);
       setReading(progressData.progress || []);
@@ -72,7 +74,7 @@ export default function BookshelfPage() {
   const removeBook = async (bookId: number) => {
     setRemoving(bookId);
     try {
-      const response = await fetch(`/api/bookshelf?bookId=${bookId}`, { method: "DELETE" });
+      const response = await apiFetch(`/api/bookshelf?bookId=${bookId}`, { method: "DELETE" });
       if (response.ok) setEntries((current) => current.filter((entry) => entry.book.id !== bookId));
     } finally {
       setRemoving(null);

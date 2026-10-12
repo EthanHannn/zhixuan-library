@@ -1,3 +1,4 @@
+import { rejectUnauthorizedRequest } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -5,6 +6,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await rejectUnauthorizedRequest("GET");
+  if (denied) return denied;
   try {
     const { id } = await params;
     const bookId = parseInt(id);

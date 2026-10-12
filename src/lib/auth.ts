@@ -1,72 +1,23 @@
-import { NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
+import { headers } from "next/headers";
+import { NextResponse } from "next/server";
+import { cache } from "react";
 import { prisma } from "./prisma";
-import bcrypt from "bcryptjs";
+import { gatewayConfig, gatewayFailure } from "./gateway-policy";
+import type { ReaderContext } from "./reader-types";
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        username: { label: "Username", type: "text" },
-        password: { label: "Password", type: "password" }
-      },
-      async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) {
-          return null;
-        }
+export async function rejectUnauthorizedRequest(method = "GET") {
+  const failure = gatewayFailure(await headers(), method);
+  return failure ? NextResponse.json({ error: failure.error }, { status: failure.status, headers: { "Cache-Control": "no-store" } }) : null;
+}
 
-        const user = await prisma.user.findUnique({
-          where: { username: credentials.username }
-        });
-
-        if (!user) {
-          return null;
-        }
-
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        );
-
-        if (!isPasswordValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          name: user.nickname || user.username,
-          username: user.username,
-          nickname: user.nickname || user.username,
-          role: user.role,
-        };
-      }
-    })
-  ],
-  session: {
-    strategy: "jwt"
-  },
-  pages: {
-    signIn: "/login",
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.role = user.role;
-        token.username = user.username;
-        token.nickname = user.nickname;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.sub!;
-        session.user.role = token.role;
-        session.user.username = token.username;
-        session.user.nickname = token.nickname;
-        session.user.name = token.nickname;
-      }
-      return session;
-    }
-  }
-};
+// Per-request/render deduplication; never cache an identity across requests.
+export const getCurrentReader = cache(async (): Promise<ReaderContext | null> => {
+  if (gatewayFailure(await headers(), "GET")) return null;
+  const config = gatewayConfig()!;
+  const user = await prisma.user.findUnique({
+    where: { id: "default-reader" },
+    select: { id: true, username: true, nickname: true, role: true },
+  });
+  if (!user) return null;
+  return { user: { ...user, nickname: user.nickname || user.username }, logoutUrl: `${config.authOrigin}/logout` };
+});

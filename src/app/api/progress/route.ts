@@ -1,16 +1,17 @@
+import { getCurrentReader, rejectUnauthorizedRequest } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 // 获取当前用户的最近阅读列表（需登录）
 export async function GET() {
+  const denied = await rejectUnauthorizedRequest("GET");
+  if (denied) return denied;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const reader = await getCurrentReader();
+    if (!reader?.user) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
-    const userId = session.user.id;
+    const userId = reader.user.id;
 
     const progress = await prisma.readingProgress.findMany({
       where: { userId },

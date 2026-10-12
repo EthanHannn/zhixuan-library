@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-fetch";
+
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { BookCard } from "@/components/BookCard";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -54,7 +56,7 @@ export default function LibraryPage() {
     setSortBy(params.get("sortBy") || "score");
     setPage(Math.max(1, parseInt(params.get("page") || "1") || 1));
     setReady(true);
-    fetch("/api/categories")
+    apiFetch("/api/categories")
       .then((response) => response.json())
       .then((data) => setFilters({ categories: data.categories || [], subcategories: data.subcategories || [], stats: data.stats || { books: 0, authors: 0, minScore: 7.5 } }))
       .catch(() => undefined);
@@ -87,7 +89,7 @@ export default function LibraryPage() {
     window.history.replaceState(null, "", `/library?${urlParams.toString()}`);
 
     try {
-      const response = await fetch(`/api/books?${params}`);
+      const response = await apiFetch(`/api/books?${params}`);
       const data = await response.json();
       setBooks(data.books || []);
       setTotal(data.pagination?.total || 0);

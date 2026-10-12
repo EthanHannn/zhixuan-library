@@ -1,6 +1,5 @@
+import { getCurrentReader, rejectUnauthorizedRequest } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MIN_BOOK_SCORE } from "@/lib/catalog";
 import type { Prisma } from "@prisma/client";
@@ -17,6 +16,8 @@ const bookSchema = z.object({
 
 // 获取书籍列表
 export async function GET(req: NextRequest) {
+  const denied = await rejectUnauthorizedRequest("GET");
+  if (denied) return denied;
   try {
     const { searchParams } = new URL(req.url);
     const sortBy = searchParams.get("sortBy") || "score";
@@ -109,9 +110,11 @@ export async function GET(req: NextRequest) {
 
 // 提交新书
 export async function POST(req: NextRequest) {
+  const denied = await rejectUnauthorizedRequest("POST");
+  if (denied) return denied;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const reader = await getCurrentReader();
+    if (!reader?.user) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
 
@@ -121,7 +124,7 @@ export async function POST(req: NextRequest) {
     const book = await prisma.book.create({
       data: {
         ...data,
-        submittedById: session.user.id,
+        submittedById: reader.user.id,
         status: "PENDING"  // 需要管理员审核
       }
     });

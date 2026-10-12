@@ -1,9 +1,10 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-fetch";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useReader } from "@/app/providers";
 import { BookCover } from "@/components/BookCover";
 import { SiteHeader } from "@/components/SiteHeader";
 import { formatReadingPosition, formatWordCount } from "@/lib/format";
@@ -31,8 +32,7 @@ const voteTypeLabels: Record<string, string> = {
 };
 
 export default function ProfilePage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const { data: reader, status } = useReader();
   const [votes, setVotes] = useState<Vote[]>([]);
   const [reading, setReading] = useState<ReadingEntry[]>([]);
   const [shelfCount, setShelfCount] = useState(0);
@@ -40,11 +40,10 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/login");
       return;
     }
     if (status !== "authenticated") return;
-    Promise.all([fetch("/api/votes"), fetch("/api/progress"), fetch("/api/bookshelf")])
+    Promise.all([apiFetch("/api/votes"), apiFetch("/api/progress"), apiFetch("/api/bookshelf")])
       .then(async ([voteResponse, progressResponse, shelfResponse]) => Promise.all([voteResponse.json(), progressResponse.json(), shelfResponse.json()]))
       .then(([voteData, progressData, shelfData]) => {
         setVotes(voteData.votes || []);
@@ -52,12 +51,12 @@ export default function ProfilePage() {
         setShelfCount(shelfData.count || 0);
       })
       .finally(() => setLoading(false));
-  }, [router, status]);
+  }, [status]);
 
-  if (status === "loading" || loading) return <div className="min-h-screen bg-[#f5f1e8]"><SiteHeader /><div className="py-32 text-center font-medium text-[#6c655b]">正在整理个人资料…</div></div>;
-  if (!session) return null;
+  if (loading) return <div className="min-h-screen bg-[#f5f1e8]"><SiteHeader /><div className="py-32 text-center font-medium text-[#6c655b]">正在整理个人资料…</div></div>;
+  if (!reader) return null;
 
-  const displayName = session.user.nickname || session.user.username;
+  const displayName = reader.user.nickname || reader.user.username;
 
   return (
     <div className="min-h-screen bg-[#f5f1e8] text-[#292722]">
@@ -66,13 +65,13 @@ export default function ProfilePage() {
         <section className="overflow-hidden rounded-[2rem] border border-[#d3c8b7] bg-[#fffdf8] shadow-[0_22px_65px_rgba(55,45,35,0.08)]">
           <div className="grid gap-7 bg-[#294e42] px-6 py-9 text-white sm:px-9 md:grid-cols-[auto_1fr_auto] md:items-center">
             <div className="flex h-20 w-20 items-center justify-center rounded-[1.5rem] bg-[#b35d42] font-serif text-3xl font-bold shadow-lg">{displayName.slice(0, 1)}</div>
-            <div><p className="text-xs font-semibold tracking-[0.28em] text-[#efb69d]">PRIVATE READER</p><h1 className="mt-2 font-serif text-4xl font-bold">{displayName}</h1><p className="mt-2 font-medium text-white/70">@{session.user.username} · {session.user.role === "ADMIN" ? "书库管理员" : "书库成员"}</p></div>
+            <div><p className="text-xs font-semibold tracking-[0.28em] text-[#efb69d]">PRIVATE READER</p><h1 className="mt-2 font-serif text-4xl font-bold">{displayName}</h1><p className="mt-2 font-medium text-white/70">@{reader.user.username} · {reader.user.role === "ADMIN" ? "书库管理员" : "书库成员"}</p></div>
             <div className="flex gap-7 text-sm text-white/65 md:text-right"><span><b className="block font-serif text-3xl text-white">{shelfCount}</b>书架收藏</span><span><b className="block font-serif text-3xl text-white">{reading.length}</b>阅读记录</span><span><b className="block font-serif text-3xl text-white">{votes.length}</b>书评票</span></div>
           </div>
           <div className="grid divide-y divide-[#e3dbcf] sm:grid-cols-3 sm:divide-x sm:divide-y-0">
             <Link href="/bookshelf" className="group p-6 hover:bg-[#f5f1e8]"><span className="text-xs font-bold tracking-wide text-[#9b4b35]">MY SHELF</span><h2 className="mt-2 font-serif text-xl font-bold text-[#2d4038]">打开我的书架</h2><p className="mt-2 text-sm font-medium leading-6 text-[#6d665c]">收藏作品与继续阅读都在这里</p></Link>
             <Link href="/library" className="group p-6 hover:bg-[#f5f1e8]"><span className="text-xs font-bold tracking-wide text-[#9b4b35]">DISCOVER</span><h2 className="mt-2 font-serif text-xl font-bold text-[#2d4038]">浏览完整书库</h2><p className="mt-2 text-sm font-medium leading-6 text-[#6d665c]">按题材、评分和篇幅精确筛选</p></Link>
-            {session.user.role === "ADMIN" ? <Link href="/register" className="group p-6 hover:bg-[#f5f1e8]"><span className="text-xs font-bold tracking-wide text-[#9b4b35]">MEMBERS</span><h2 className="mt-2 font-serif text-xl font-bold text-[#2d4038]">添加书库成员</h2><p className="mt-2 text-sm font-medium leading-6 text-[#6d665c]">为熟人创建独立登录账号</p></Link> : <div className="p-6"><span className="text-xs font-bold tracking-wide text-[#9b4b35]">ACCOUNT</span><h2 className="mt-2 font-serif text-xl font-bold text-[#2d4038]">私人阅读账号</h2><p className="mt-2 text-sm font-medium leading-6 text-[#6d665c]">进度、书架和投票仅保存在本站</p></div>}
+            <div className="p-6"><span className="text-xs font-bold tracking-wide text-[#9b4b35]">ACCOUNT</span><h2 className="mt-2 font-serif text-xl font-bold text-[#2d4038]">私人阅读账号</h2><p className="mt-2 text-sm font-medium leading-6 text-[#6d665c]">进度、书架和投票仅保存在本站</p></div>
           </div>
         </section>
 

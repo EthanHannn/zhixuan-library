@@ -1,9 +1,11 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-fetch";
+
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useReader } from "@/app/providers";
 import { useReaderTts } from "@/hooks/useReaderTts";
 
 interface ChapterInfo {
@@ -121,7 +123,7 @@ function colorizeText(text: string, theme: ReaderTheme): ReactNode[] {
 
 export default function ReaderPage() {
   const { id } = useParams();
-  const { data: session } = useSession();
+  const { data: reader } = useReader();
 
   const bookId = parseInt(id as string);
   const [book, setBook] = useState<{ title: string; author: string; chapterCount: number; hasContent: boolean } | null>(null);
@@ -138,6 +140,7 @@ export default function ReaderPage() {
   const [colorize, setColorize] = useState(true);
   const [inBookshelf, setInBookshelf] = useState(false);
   const [shelfLoading, setShelfLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("进度自动保存");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const paragraphRefs = useRef<Array<HTMLParagraphElement | null>>([]);
@@ -156,23 +159,23 @@ export default function ReaderPage() {
   }, []);
 
   useEffect(() => {
-    if (!session?.user || !Number.isFinite(bookId)) return;
-    fetch(`/api/bookshelf?bookId=${bookId}`)
+    if (!reader?.user || !Number.isFinite(bookId)) return;
+    apiFetch(`/api/bookshelf?bookId=${bookId}`)
       .then((response) => response.ok ? response.json() : null)
       .then((data) => setInBookshelf(!!data?.inBookshelf))
       .catch(() => undefined);
-  }, [bookId, session?.user]);
+  }, [bookId, reader?.user]);
 
   useEffect(() => {
     if (!book?.hasContent) return;
-    fetch(`/api/books/${bookId}/cover`, { method: "POST" }).catch(() => undefined);
+    apiFetch(`/api/books/${bookId}/cover`, { method: "POST" }).catch(() => undefined);
   }, [book?.hasContent, bookId]);
 
   // 加载书籍与目录
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/books/${bookId}/chapters`);
+        const res = await apiFetch(`/api/books/${bookId}/chapters`);
         const data = await res.json();
         setBook(data.book);
         setChapters(data.chapters || []);
@@ -191,9 +194,14 @@ export default function ReaderPage() {
   }, [bookId]);
 
   const resolveStartChapter = async (bid: number, total: number) => {
-    // 登录用户优先取云端进度，否则取本地进度
+    // Unsynced local progress takes precedence after session expiry.
     try {
-      const res = await fetch(`/api/books/${bid}/progress`);
+      const pending = JSON.parse(localStorage.getItem(PROGRESS_PREFIX + bid) || "null");
+      if (pending?.pending && pending.chapterIdx) return Math.min(pending.chapterIdx, total || pending.chapterIdx);
+    } catch { /* storage unavailable */ }
+    // Otherwise use the server progress.
+    try {
+      const res = await apiFetch(`/api/books/${bid}/progress`);
       if (res.ok) {
         const { progress } = await res.json();
         if (progress) return Math.min(progress.chapterIdx, total || progress.chapterIdx);
@@ -213,7 +221,8 @@ export default function ReaderPage() {
   const loadChapter = useCallback(async (idx: number) => {
     setContentLoading(true);
     try {
-      const res = await fetch(`/api/books/${bookId}/content?chapter=${idx}`);
+      const res = await apiFetch(`/api/books/${bookId}/content?chapter=${idx}`);
+      if (res.status === 401) return;
       if (!res.ok) {
         const data = await res.json();
         setContent({ idx, title: "无法读取", content: data.error || "章节加载失败", total: book?.chapterCount || 0, hasPrev: idx > 1, hasNext: false });
@@ -222,6 +231,9 @@ export default function ReaderPage() {
       const data = await res.json();
       setContent(data);
       setCurrentIdx(data.idx);
+      const address = new URL(window.location.href);
+      address.searchParams.set("c", String(data.idx));
+      window.history.replaceState(window.history.state, "", address.pathname + address.search);
     } catch (e) {
       console.error(e);
     } finally {
@@ -238,20 +250,31 @@ export default function ReaderPage() {
     }
   }, [currentIdx, book?.hasContent, loadChapter, stopTts]);
 
-  // 保存进度（滚动节流 + 章节切换）
+  // Record locally before attempting a network write. Older responses must not
+  // clear newer unsaved progress when requests finish out of order.
   const saveProgress = useCallback((idx: number, percent: number) => {
     const key = PROGRESS_PREFIX + bookId;
-    try {
-      localStorage.setItem(key, JSON.stringify({ chapterIdx: idx, percent, updatedAt: Date.now() }));
-    } catch { /* ignore */ }
-    if (session?.user) {
-      fetch(`/api/books/${bookId}/progress`, {
+    const progress = { chapterIdx: idx, percent, updatedAt: Date.now(), pending: true };
+    let localSaved = false;
+    try { localStorage.setItem(key, JSON.stringify(progress)); localSaved = true; } catch { /* storage unavailable */ }
+    setSyncStatus(localSaved ? "正在同步进度…" : "本地存储不可用，正在保存…");
+    if (reader?.user) {
+      apiFetch(`/api/books/${bookId}/progress`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chapterIdx: idx, percent }),
-      }).catch(() => {});
+        keepalive: true,
+      }).then(response => {
+        if (!response.ok) throw new Error("Progress not saved");
+        try {
+          const current = JSON.parse(localStorage.getItem(key) || "null");
+          if (current?.updatedAt !== progress.updatedAt) return;
+          localStorage.setItem(key, JSON.stringify({ ...progress, pending: false }));
+        } catch { /* server save still succeeded */ }
+        setSyncStatus("进度已同步");
+      }).catch(() => setSyncStatus(localSaved ? "进度已暂存，等待重新同步" : "进度保存失败，请保持页面打开"));
     }
-  }, [bookId, session]);
+  }, [bookId, reader]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -260,14 +283,16 @@ export default function ReaderPage() {
       const max = el.scrollHeight - el.clientHeight;
       const percent = max > 0 ? el.scrollTop / max : 0;
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => saveProgress(currentIdx, percent), 800);
+      if (!content?.idx) return;
+      try { localStorage.setItem(PROGRESS_PREFIX + bookId, JSON.stringify({ chapterIdx: content.idx, percent, updatedAt: Date.now(), pending: true })); } catch { /* storage unavailable */ }
+      saveTimer.current = setTimeout(() => saveProgress(content.idx, percent), 800);
     };
     el.addEventListener("scroll", onScroll);
     return () => {
       el.removeEventListener("scroll", onScroll);
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [currentIdx, saveProgress]);
+  }, [bookId, content?.idx, saveProgress]);
 
   // 恢复阅读位置（百分比滚动）
   useEffect(() => {
@@ -275,8 +300,8 @@ export default function ReaderPage() {
     (async () => {
       let percent = 0;
       try {
-        if (session?.user) {
-          const res = await fetch(`/api/books/${bookId}/progress`);
+        if (reader?.user) {
+          const res = await apiFetch(`/api/books/${bookId}/progress`);
           if (res.ok) {
             const { progress } = await res.json();
             if (progress && progress.chapterIdx === content.idx) percent = progress.percent;
@@ -292,6 +317,13 @@ export default function ReaderPage() {
           }
         } catch { /* ignore */ }
       }
+      try {
+        const pending = JSON.parse(localStorage.getItem(PROGRESS_PREFIX + bookId) || "null");
+        if (pending?.pending && pending.chapterIdx === content.idx) {
+          percent = pending.percent || 0;
+        }
+      } catch { /* storage unavailable */ }
+      saveProgress(content.idx, percent);
       requestAnimationFrame(() => {
         const el = scrollRef.current;
         if (el && percent > 0) {
@@ -356,10 +388,10 @@ export default function ReaderPage() {
   };
 
   const toggleBookshelf = async () => {
-    if (!session?.user || shelfLoading) return;
+    if (!reader?.user || shelfLoading) return;
     setShelfLoading(true);
     try {
-      const response = await fetch(inBookshelf ? `/api/bookshelf?bookId=${bookId}` : "/api/bookshelf", {
+      const response = await apiFetch(inBookshelf ? `/api/bookshelf?bookId=${bookId}` : "/api/bookshelf", {
         method: inBookshelf ? "DELETE" : "POST",
         headers: inBookshelf ? undefined : { "Content-Type": "application/json" },
         body: inBookshelf ? undefined : JSON.stringify({ bookId }),
@@ -417,7 +449,7 @@ export default function ReaderPage() {
       >
         <Link href="/" className="flex size-8 shrink-0 items-center justify-center rounded-lg font-serif text-sm font-bold text-white shadow-sm transition-transform hover:-rotate-3" style={{ background: theme.accent }} title="返回知轩书房首页" aria-label="返回知轩书房首页">知</Link>
         <Link href={`/book/${bookId}`} className="shrink-0 rounded-full px-2.5 py-1.5 text-sm transition-opacity hover:opacity-65">← <span className="hidden sm:inline">详情</span></Link>
-        <Link href={`/book/${bookId}`} className="min-w-0 flex-1 truncate text-center text-sm font-bold transition-opacity hover:opacity-65 sm:text-base" style={{ color: theme.title }} title="返回小说详情">{book.title}</Link>
+        <Link href={`/book/${bookId}`} className="min-w-0 flex-1 truncate text-center text-sm font-bold transition-opacity hover:opacity-65 sm:text-base" style={{ color: theme.title }} title="返回小说详情">{book.title}<span role="status" className="ml-3 text-xs font-normal opacity-70">{syncStatus}</span></Link>
         <button
           type="button"
           onClick={() => { setTtsOpen((open) => !open); setPaletteOpen(false); setTocOpen(false); }}
@@ -430,7 +462,7 @@ export default function ReaderPage() {
         <button
           type="button"
           onClick={toggleBookshelf}
-          disabled={shelfLoading || !session?.user}
+          disabled={shelfLoading || !reader?.user}
           className="shrink-0 rounded-full border px-2 py-1.5 text-xs font-bold transition-opacity hover:opacity-75 disabled:opacity-45 sm:px-3 sm:text-sm"
           style={{ borderColor: inBookshelf ? theme.accent : theme.border, background: theme.accentSoft, color: theme.accent }}
           title={inBookshelf ? "从书架移出" : "加入书架"}

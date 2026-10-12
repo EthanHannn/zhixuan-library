@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { getCurrentReader } from "@/lib/auth";
 
 const notoSerifSC = Noto_Serif_SC({
   weight: ["300", "500", "700"],
@@ -14,15 +15,16 @@ export const metadata: Metadata = {
   description: "只为获准成员开放的私人高分小说书房",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const reader = await getCurrentReader();
   return (
     <html lang="zh-CN">
       <body className={`${notoSerifSC.variable} antialiased`}>
-        <Providers>{children}</Providers>
+        <Providers reader={reader}>{children}</Providers>
       </body>
     </html>
   );

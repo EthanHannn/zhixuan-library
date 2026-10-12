@@ -1,6 +1,5 @@
+import { getCurrentReader, rejectUnauthorizedRequest } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { MIN_BOOK_SCORE } from "@/lib/catalog";
 import { z } from "zod";
@@ -11,9 +10,11 @@ const voteSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const denied = await rejectUnauthorizedRequest("POST");
+  if (denied) return denied;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const reader = await getCurrentReader();
+    if (!reader?.user) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
 
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
     const existingVote = await prisma.vote.findUnique({
       where: {
         userId_bookId: {
-          userId: session.user.id,
+          userId: reader.user.id,
           bookId
         }
       }
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
     // 创建投票
     const vote = await prisma.vote.create({
       data: {
-        userId: session.user.id,
+        userId: reader.user.id,
         bookId,
         type
       }
@@ -101,9 +102,11 @@ export async function POST(req: NextRequest) {
 
 // 获取用户的投票记录
 export async function GET(req: NextRequest) {
+  const denied = await rejectUnauthorizedRequest("GET");
+  if (denied) return denied;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const reader = await getCurrentReader();
+    if (!reader?.user) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
 
@@ -115,7 +118,7 @@ export async function GET(req: NextRequest) {
       const vote = await prisma.vote.findUnique({
         where: {
           userId_bookId: {
-            userId: session.user.id,
+            userId: reader.user.id,
             bookId: parseInt(bookId)
           }
         }
@@ -125,7 +128,7 @@ export async function GET(req: NextRequest) {
       // 获取用户所有投票
       const votes = await prisma.vote.findMany({
         where: {
-          userId: session.user.id
+          userId: reader.user.id
         },
         include: {
           book: true

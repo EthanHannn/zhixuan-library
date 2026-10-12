@@ -1,202 +1,78 @@
-/** 生产构建认证冒烟测试：临时启动服务，验证页面、API、封面和真实登录。 */
-require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
-const { spawn } = require("child_process");
-const path = require("path");
+/** Isolated real-server authentication and business-data regression test. */
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { spawn, spawnSync } = require("node:child_process");
 const { PrismaClient } = require("@prisma/client");
 
-const projectRoot = path.join(__dirname, "..");
-const port = Number(process.env.AUTH_SMOKE_PORT || "3107");
-const baseUrl = `http://127.0.0.1:${port}`;
-const username = process.env.OWNER_USERNAME || "codingCat";
-const password = process.env.OWNER_PASSWORD || "Think24";
-const cookies = new Map();
-
-function absorbCookies(response) {
-  const values = typeof response.headers.getSetCookie === "function"
-    ? response.headers.getSetCookie()
-    : [response.headers.get("set-cookie")].filter(Boolean);
-  for (const value of values) {
-    const pair = value.split(";", 1)[0];
-    const separator = pair.indexOf("=");
-    if (separator > 0) cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
-  }
+const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "zhixuan-auth-"));
+const origin = "https://library.private.example.test";
+const env = { ...process.env, DATABASE_URL: `file:${path.join(fixture, "fixture.db").replaceAll("\\", "/")}`, NOVEL_ROOT: fixture, COVER_ROOT: fixture, COVER_AUTO_FETCH: "false", PORTAL_ALLOWED_USER: "owner", LIBRARY_PUBLIC_URL: origin, PORTAL_AUTH_URL: "https://auth.private.example.test", NODE_ENV: "production", PORT: "16870", HOSTNAME: "127.0.0.1" };
+let server;
+let container = false;
+const image = process.env.AUTH_TEST_IMAGE;
+function runNode(script, args = []) {
+  const result = spawnSync(process.execPath, [script, ...args], { env, encoding: "utf8", windowsHide: true });
+  if (result.status !== 0) throw new Error(`Fixture command failed: ${script}\n${result.stderr}`);
 }
-
-function cookieHeader() {
-  return [...cookies].map(([key, value]) => `${key}=${value}`).join("; ");
+async function request(url, { trusted = true, method = "GET", body, headers = {} } = {}) {
+  return fetch(`http://127.0.0.1:16870${url}`, { method, redirect: "manual", headers: { ...(trusted ? { "Remote-User": "owner" } : {}), ...(body ? { "Content-Type": "application/json" } : {}), ...(method !== "GET" ? { Origin: origin } : {}), ...headers }, body: body ? JSON.stringify(body) : undefined });
 }
-
-async function request(url, options = {}) {
-  const response = await fetch(baseUrl + url, {
-    redirect: "manual",
-    ...options,
-    headers: { ...(options.headers || {}), ...(cookies.size ? { Cookie: cookieHeader() } : {}) },
-  });
-  absorbCookies(response);
-  return response;
-}
-
-async function waitUntilReady() {
-  for (let attempt = 0; attempt < 40; attempt++) {
-    try {
-      const response = await fetch(baseUrl + "/login");
-      if (response.ok) return;
-    } catch { /* server is still starting */ }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error("临时服务器启动超时");
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
-
 async function main() {
-  const prisma = new PrismaClient();
-  let testUserId = null;
-  let testBookId = null;
-  let createdShelfEntry = false;
-  let createdProgress = false;
-  const nextBin = path.join(projectRoot, "node_modules", "next", "dist", "bin", "next");
-  const server = spawn(process.execPath, [nextBin, "start", "-p", String(port)], {
-    cwd: projectRoot,
-    env: process.env,
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-  });
-  let serverError = "";
-  server.stderr.on("data", (chunk) => { serverError += chunk.toString(); });
-
+  runNode("node_modules/prisma/build/index.js", ["db", "push", "--skip-generate"]);
+  const db = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
   try {
-    await waitUntilReady();
-    const login = await request("/login");
-    const home = await request("/");
-    const api = await request("/api/books");
-    const cover = await request("/covers/real/1.jpg");
-    const lazyCoverApi = await request("/api/books/1/cover", { method: "POST" });
-
-    assert(login.status === 200, `登录页状态异常: ${login.status}`);
-    assert(home.status >= 300 && home.status < 400, `未登录首页没有跳转: ${home.status}`);
-    assert(api.status === 401, `未登录 API 没有返回 401: ${api.status}`);
-    assert(cover.status >= 300 && cover.status < 400, `未登录封面没有被保护: ${cover.status}`);
-    assert(lazyCoverApi.status === 401, `未登录懒封面接口没有返回 401: ${lazyCoverApi.status}`);
-
-    const csrfResponse = await request("/api/auth/csrf");
-    const { csrfToken } = await csrfResponse.json();
-    const body = new URLSearchParams({ csrfToken, username, password, callbackUrl: baseUrl, json: "true" });
-    await request("/api/auth/callback/credentials", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-    });
-
-    const sessionResponse = await request("/api/auth/session");
-    const session = await sessionResponse.json();
-    const authenticatedHome = await request("/");
-    const categoriesResponse = await request("/api/categories");
-    const categoryData = await categoriesResponse.json();
-    const booksResponse = await request("/api/books?limit=1&onlyContent=1");
-    const bookData = await booksResponse.json();
-    const sampleBook = bookData.books?.[0];
-    const wordFilterResponse = await request("/api/books?limit=5&onlyContent=1&minWords=1&maxWords=1000000&sortBy=words");
-    const wordFilterData = await wordFilterResponse.json();
-    const sampleCategory = categoryData.categories?.[0]?.name;
-    const categoryFilterResponse = await request(`/api/books?limit=5&onlyContent=1&tag1=${encodeURIComponent(sampleCategory || "")}`);
-    const categoryFilterData = await categoryFilterResponse.json();
-    const similarResponse = await request(`/api/books/${sampleBook.id}/similar?limit=3`);
-    const similarData = await similarResponse.json();
-    const detailPage = await request(`/book/${sampleBook.id}`);
-    const readerPage = await request(`/read/${sampleBook.id}`);
-    assert(authenticatedHome.status === 200, `登录后首页不可访问: ${authenticatedHome.status}`);
-    assert(categoriesResponse.status === 200, `登录后分类 API 不可访问: ${categoriesResponse.status}`);
-    assert(booksResponse.status === 200 && sampleBook, "登录后无法取得书库样例");
-    assert(categoryData.stats?.minScore === 7.5, "高分馆藏阈值不是 7.5");
-    assert(Array.isArray(categoryData.subcategories), "书库缺少细分题材筛选数据");
-    assert(sampleCategory, "一级分类数据为空");
-    assert(typeof sampleBook.wordCount === "number", "书籍缺少 wordCount 字段");
-    assert(wordFilterResponse.status === 200 && wordFilterData.books?.length, "篇幅筛选没有返回样例");
-    assert(wordFilterData.books.every((book) => book.wordCount >= 1 && book.wordCount <= 1000000), "篇幅筛选返回了范围外作品");
-    assert(wordFilterData.books.every((book, index, books) => index === 0 || books[index - 1].wordCount >= book.wordCount), "字数排序不正确");
-    assert(categoryFilterResponse.status === 200 && categoryFilterData.books?.length && categoryFilterData.books.every((book) => book.tag1 === sampleCategory), "一级分类筛选不正确");
-    assert(similarResponse.status === 200 && similarData.books?.length === 3, "相似作品推荐没有返回预期数量");
-    assert(similarData.books.every((book) => book.id !== sampleBook.id), "相似作品推荐包含当前作品");
-    assert(detailPage.status === 200, `作品详情页不可访问: ${detailPage.status}`);
-    assert(readerPage.status === 200, `阅读页不可访问: ${readerPage.status}`);
-    assert(session.user?.username === username, "会话用户名不匹配");
-    assert(session.user?.nickname === "老板", "会话昵称不匹配");
-    assert(session.user?.role === "ADMIN", "会话角色不是 ADMIN");
-    testUserId = session.user.id;
-    testBookId = sampleBook.id;
-
-    const previousShelfResponse = await request(`/api/bookshelf?bookId=${sampleBook.id}`);
-    const previousShelfState = await previousShelfResponse.json();
-    assert(previousShelfResponse.status === 200, `读取原书架状态失败: ${previousShelfResponse.status}`);
-    const previousProgressResponse = await request(`/api/books/${sampleBook.id}/progress`);
-    const previousProgressState = await previousProgressResponse.json();
-    assert(previousProgressResponse.status === 200, `读取原阅读进度失败: ${previousProgressResponse.status}`);
-
-    const addShelfResponse = await request("/api/bookshelf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bookId: sampleBook.id }),
-    });
-    assert(addShelfResponse.status === 200, `加入书架失败: ${addShelfResponse.status}`);
-    createdShelfEntry = !previousShelfState.inBookshelf;
-
-    const expectedProgress = previousProgressState.progress || { chapterIdx: 1, percent: 0.125 };
-    if (!previousProgressState.progress) {
-      const saveProgressResponse = await request(`/api/books/${sampleBook.id}/progress`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(expectedProgress),
-      });
-      assert(saveProgressResponse.status === 200, `保存阅读进度失败: ${saveProgressResponse.status}`);
-      createdProgress = true;
-    }
-
-    const shelfStateResponse = await request(`/api/bookshelf?bookId=${sampleBook.id}`);
-    const shelfState = await shelfStateResponse.json();
-    assert(shelfState.inBookshelf === true, "书架状态没有保存");
-    const shelfResponse = await request("/api/bookshelf");
-    const shelfData = await shelfResponse.json();
-    const shelfBook = shelfData.entries?.find((entry) => entry.book.id === sampleBook.id)?.book;
-    assert(shelfResponse.status === 200 && shelfBook, "书架列表没有返回已加入的书");
-    assert(shelfBook.progress?.chapterIdx === expectedProgress.chapterIdx, "书架没有关联阅读进度");
-    const readingResponse = await request("/api/progress");
-    const readingData = await readingResponse.json();
-    assert(readingResponse.status === 200, `阅读记录接口失败: ${readingResponse.status}`);
-    assert(readingData.progress?.some((entry) => entry.book.id === sampleBook.id), "阅读足迹没有保存测试进度");
-
-    console.log(JSON.stringify({
-      login: login.status,
-      unauthenticatedHome: home.status,
-      unauthenticatedApi: api.status,
-      unauthenticatedCover: cover.status,
-      authenticatedHome: authenticatedHome.status,
-      visibleBooks: categoryData.stats.books,
-      libraryFilters: { categories: categoryData.categories.length, subcategories: categoryData.subcategories.length },
-      advancedFilterRoundTrip: true,
-      similarRecommendations: similarData.books.length,
-      detailAndReaderPages: true,
-      bookshelfRoundTrip: true,
-      readingProgressRoundTrip: true,
-      session: { username: session.user.username, nickname: session.user.nickname, role: session.user.role },
-    }, null, 2));
-  } finally {
-    if (server.exitCode === null) {
-      server.kill();
-      await new Promise((resolve) => server.once("exit", resolve));
-    }
-    if (testUserId && testBookId) {
-      if (createdShelfEntry) await prisma.bookshelfEntry.deleteMany({ where: { userId: testUserId, bookId: testBookId } });
-      if (createdProgress) await prisma.readingProgress.deleteMany({ where: { userId: testUserId, bookId: testBookId } });
-    }
-    await prisma.$disconnect();
-    if (serverError.trim()) console.error(serverError.trim());
+    const text = "第一章 初见\n\n用于集成测试的正文。\n\n第二章 继续\n\n阅读位置应正确保存。";
+    fs.writeFileSync(path.join(fixture, "sample.txt"), text);
+    const split = Buffer.byteLength(text.slice(0, text.indexOf("第二章")));
+    await db.book.create({ data: { id: 1, title: "认证回归样本", author: "测试", tag1: "玄幻", tag2: "测试", size: "1万字", intro: "独立测试书库", status: "APPROVED", score: 9, hasContent: true, chapterCount: 2, filePath: "sample.txt", chapters: { create: [{ idx: 1, title: "初见", startOffset: 0, endOffset: split }, { idx: 2, title: "继续", startOffset: split, endOffset: Buffer.byteLength(text) }] } } });
+    // Exercise the old-schema transition without using anyone's actual database.
+    await db.$executeRawUnsafe('ALTER TABLE "users" ADD COLUMN "password" TEXT');
+    runNode("scripts/prepare-reader.js");
+    runNode("scripts/prepare-reader.js");
+    const columns = await db.$queryRawUnsafe('PRAGMA table_info("users")');
+    assert(!columns.some(c => c.name === "password"));
+    assert.equal(await db.book.count(), 1);
+    assert.equal(await db.chapter.count(), 2);
+  } finally { await db.$disconnect(); }
+  if (image) {
+    const args = ["run", "--detach", "--rm", "--name", `zhixuan-auth-${process.pid}`, "-p", "127.0.0.1:16870:3000", "-v", `${fixture}:/app/data`, "-v", `${fixture}:/data/novels:ro`, "-e", "DATABASE_URL=file:/app/data/fixture.db", "-e", "NOVEL_ROOT=/data/novels", "-e", "COVER_AUTO_FETCH=false", "-e", "PORTAL_ALLOWED_USER=owner", "-e", `LIBRARY_PUBLIC_URL=${origin}`, "-e", "PORTAL_AUTH_URL=https://auth.private.example.test", image];
+    const result = spawnSync("docker", args, { encoding: "utf8", windowsHide: true });
+    assert.equal(result.status, 0, result.stderr); container = true;
+  } else {
+    server = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", "16870"], { env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    server.stdout.on("data", () => {}); server.stderr.on("data", () => {});
   }
+  for (let i = 0; i < 100; i++) {
+    try { if ((await request("/api/health", { trusted: false })).ok) break; } catch { /* wait for server */ }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  assert.equal((await request("/api/health", { trusted: false })).status, 200);
+  for (const url of ["/", "/api/books", "/api/categories", "/api/books/1/content?chapter=1", "/api/bookshelf", "/api/progress", "/api/comments?bookId=1", "/covers/1.svg", "/_next/image?url=%2Fcovers%2F1.svg&w=640&q=75"]) {
+    assert.equal((await request(url, { trusted: false, headers: { Cookie: "next-auth.session-token=retired", "X-Forwarded-User": "owner" } })).status, 401, url);
+  }
+  assert.equal((await request("/api/books", { headers: { "Remote-User": "stranger" } })).status, 403);
+  assert.equal((await request("/api/reader")).status, 200);
+  const reader = await (await request("/api/reader")).json();
+  assert.equal(reader.user.id, "default-reader"); assert.equal(reader.logoutUrl, "https://auth.private.example.test/logout");
+  assert.equal((await request("/login?callbackUrl=https://evil.test")).headers.get("location"), "/");
+  assert.equal((await request("/api/auth/session")).status, 410);
+  assert.equal((await request("/api/auth/callback/credentials", { method: "POST", body: {} })).status, 410);
+  assert.equal((await request("/api/books/1/content?chapter=1")).status, 200);
+  assert.equal((await request("/api/bookshelf", { method: "POST", body: { bookId: 1 }, headers: { Origin: "https://blog.private.example.test" } })).status, 403);
+  assert.equal((await request("/api/bookshelf", { method: "POST", body: { bookId: 1 }, headers: { "Content-Type": "text/plain" } })).status, 415);
+  assert.equal((await request("/api/bookshelf", { method: "POST", body: { bookId: 1, userId: "forged" } })).status, 200);
+  assert.equal((await request("/api/books/1/progress", { method: "POST", body: { chapterIdx: 2, percent: 0.42, userId: "forged" } })).status, 200);
+  const progress = await (await request("/api/books/1/progress")).json();
+  assert.equal(progress.progress.chapterIdx, 2); assert.equal(progress.progress.userId, "default-reader");
+  assert.equal((await request("/api/comments", { method: "POST", body: { bookId: 1, content: "测试评论", userId: "forged" } })).status, 200);
+  assert.equal((await request("/api/votes", { method: "POST", body: { bookId: 1, type: "XIANCAO", userId: "forged" } })).status, 200);
+  assert.equal((await request("/api/bookshelf?bookId=1", { method: "DELETE" })).status, 200);
+  console.log("PASS: schema transition, anonymous/forged identity, retired login, content, origin/JSON policy, shelf, progress, comment and vote ownership.");
 }
-
-main().catch((error) => {
-  console.error("认证冒烟测试失败:", error);
-  process.exitCode = 1;
+main().catch(error => { console.error(error.message); process.exitCode = 1; }).finally(async () => {
+  if (server) { server.kill(); await new Promise(resolve => server.once("close", resolve)); }
+  if (container) spawnSync("docker", ["stop", `zhixuan-auth-${process.pid}`], { stdio: "ignore", windowsHide: true });
+  if (path.dirname(path.resolve(fixture)) === path.resolve(os.tmpdir()) && path.basename(fixture).startsWith("zhixuan-auth-")) fs.rmSync(fixture, { recursive: true, force: true });
 });

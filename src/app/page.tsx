@@ -1,8 +1,10 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-fetch";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useReader } from "@/app/providers";
 import { BookCard } from "@/components/BookCard";
 import { BookCover } from "@/components/BookCover";
 import { FeaturedCarousel } from "@/components/FeaturedCarousel";
@@ -45,7 +47,7 @@ function sampleBooks(books: BookSummary[], count: number) {
 }
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { data: reader } = useReader();
   const [stats, setStats] = useState<CatalogStats>(EMPTY_STATS);
   const [banners, setBanners] = useState<BookSummary[]>([]);
   const [featured, setFeatured] = useState<BookSummary[]>([]);
@@ -55,11 +57,11 @@ export default function Home() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/categories").then((response) => response.json()),
-      fetch("/api/books?limit=30&onlyContent=1&sortBy=xiancao", { cache: "no-store" }).then((response) => response.json()),
-      fetch("/api/books?limit=6&onlyContent=1&sortBy=score").then((response) => response.json()),
-      fetch("/api/books?limit=6&onlyContent=1&sortBy=latest").then((response) => response.json()),
-      fetch("/api/progress").then((response) => response.ok ? response.json() : { progress: [] }),
+      apiFetch("/api/categories").then((response) => response.json()),
+      apiFetch("/api/books?limit=30&onlyContent=1&sortBy=xiancao", { cache: "no-store" }).then((response) => response.json()),
+      apiFetch("/api/books?limit=6&onlyContent=1&sortBy=score").then((response) => response.json()),
+      apiFetch("/api/books?limit=6&onlyContent=1&sortBy=latest").then((response) => response.json()),
+      apiFetch("/api/progress").then((response) => response.ok ? response.json() : { progress: [] }),
     ]).then(([categoryData, bannerData, featuredData, latestData, progressData]) => {
       setStats(categoryData.stats || EMPTY_STATS);
       setBanners(sampleBooks(bannerData.books || [], HERO_BOOK_COUNT));
@@ -73,7 +75,7 @@ export default function Home() {
     <div className="min-h-screen bg-[#f5f1e8] text-[#292722]">
       <SiteHeader />
       <main>
-        <FeaturedCarousel books={banners.length > 0 ? banners : featured} stats={stats} nickname={session?.user?.nickname} />
+        <FeaturedCarousel books={banners.length > 0 ? banners : featured} stats={stats} nickname={reader?.user?.nickname} />
 
         {reading.length > 0 && <section className="border-b border-[#ddd4c5] bg-[#fffdf8]"><div className="mx-auto max-w-7xl px-4 py-10 sm:px-6"><div className="flex items-end justify-between"><div><p className="text-xs font-semibold tracking-[0.25em] text-[#9b4b35]">CONTINUE READING</p><h2 className="mt-2 font-serif text-3xl font-bold text-[#263e35]">接着上次读</h2></div><Link href="/bookshelf" className="text-sm font-semibold text-[#9b4b35] hover:underline">全部阅读记录 →</Link></div><div className="mt-6 grid gap-4 lg:grid-cols-3">{reading.map((item) => <Link key={item.book.id} href={`/read/${item.book.id}?c=${item.chapterIdx}`} className="group flex items-center gap-4 rounded-2xl border border-[#ded5c6] bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-lg"><BookCover id={item.book.id} title={item.book.title} coverPath={item.book.coverPath} className="h-20 w-14 shrink-0 rounded-lg object-cover shadow" sizes="56px" /><div className="min-w-0"><h3 className="line-clamp-1 font-serif text-lg font-bold text-[#2c4037] group-hover:text-[#994b35]">{item.book.title}</h3><p className="mt-1 line-clamp-1 text-sm font-medium text-[#6c655b]">{item.book.author}</p><p className="mt-2 text-xs font-semibold text-[#a6533b]">{formatReadingPosition(item.chapterIdx, item.percent)} · 继续阅读 →</p></div></Link>)}</div></div></section>}
 

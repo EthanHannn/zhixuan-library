@@ -23,6 +23,9 @@ RUN npx prisma generate && npm run build
 
 FROM base AS runner
 
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.revision=$VCS_REF
+
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
@@ -31,6 +34,7 @@ COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=builder --chown=node:node /app/scripts/backfill-word-counts.js ./scripts/backfill-word-counts.js
+COPY --from=builder --chown=node:node /app/scripts/prepare-reader.js ./scripts/prepare-reader.js
 
 RUN mkdir -p /app/public/covers /app/data \
     && chown -R node:node /app/public/covers /app/data
@@ -39,4 +43,4 @@ USER node
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "node scripts/prepare-reader.js && exec node server.js"]

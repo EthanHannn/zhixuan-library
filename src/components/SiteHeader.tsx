@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useReader } from "@/app/providers";
 
 export function SiteHeader() {
-  const { data: session } = useSession();
+  const { data: reader } = useReader();
   const pathname = usePathname();
   const navClass = (href: string) => `transition ${pathname === href || (href !== "/" && pathname.startsWith(href)) ? "font-bold text-[#294e42]" : "font-medium text-[#625c53] hover:text-[#9e4f38]"}`;
 
@@ -24,22 +24,19 @@ export function SiteHeader() {
             <Link href="/profile" className={navClass("/profile")}>个人中心</Link>
           </nav>
         </div>
-        {session?.user && (
+        {reader?.user && (
           <div className="flex items-center gap-2 sm:gap-3">
-            {session.user.role === "ADMIN" && (
-              <Link href="/register" className="hidden rounded-full px-3 py-2 text-sm text-stone-500 transition hover:bg-white hover:text-[#294e42] sm:block">添加成员</Link>
-            )}
             <Link href="/profile" className="flex items-center gap-2 rounded-full border border-[#d1c6b5] bg-white/80 py-1.5 pl-1.5 pr-2 text-sm font-medium text-[#514c44] sm:pr-3">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#b76043] font-serif text-xs font-bold text-white">
-                {(session.user.nickname || session.user.username).slice(0, 1)}
+                {(reader.user.nickname || reader.user.username).slice(0, 1)}
               </span>
-              <span className="hidden sm:inline">{session.user.nickname || session.user.username}</span>
+              <span className="hidden sm:inline">{reader.user.nickname || reader.user.username}</span>
             </Link>
-            <button onClick={() => signOut({ callbackUrl: "/login" })} className="rounded-full px-3 py-2 text-sm text-stone-500 transition hover:bg-white hover:text-[#9e4f38]">退出</button>
+            <a href={reader.logoutUrl} className="rounded-full px-3 py-2 text-sm text-stone-500 transition hover:bg-white hover:text-[#9e4f38]">退出</a>
           </div>
         )}
       </div>
-      {session?.user && <nav className="grid grid-cols-4 border-t border-[#ded6c8] bg-[#fffdf8]/90 px-2 md:hidden"><Link href="/" className={`py-2.5 text-center text-xs ${navClass("/")}`}>首页</Link><Link href="/library" className={`py-2.5 text-center text-xs ${navClass("/library")}`}>书库</Link><Link href="/bookshelf" className={`py-2.5 text-center text-xs ${navClass("/bookshelf")}`}>我的书架</Link><Link href="/profile" className={`py-2.5 text-center text-xs ${navClass("/profile")}`}>个人中心</Link></nav>}
+      {reader?.user && <nav className="grid grid-cols-4 border-t border-[#ded6c8] bg-[#fffdf8]/90 px-2 md:hidden"><Link href="/" className={`py-2.5 text-center text-xs ${navClass("/")}`}>首页</Link><Link href="/library" className={`py-2.5 text-center text-xs ${navClass("/library")}`}>书库</Link><Link href="/bookshelf" className={`py-2.5 text-center text-xs ${navClass("/bookshelf")}`}>我的书架</Link><Link href="/profile" className={`py-2.5 text-center text-xs ${navClass("/profile")}`}>个人中心</Link></nav>}
     </header>
   );
 }

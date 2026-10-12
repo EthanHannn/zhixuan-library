@@ -1,18 +1,19 @@
+import { getCurrentReader, rejectUnauthorizedRequest } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { z } from "zod";
-import { authOptions } from "@/lib/auth";
 import { MIN_BOOK_SCORE } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
 
 const bookIdSchema = z.coerce.number().int().positive();
 
 async function currentUserId() {
-  const session = await getServerSession(authOptions);
-  return session?.user?.id || null;
+  const reader = await getCurrentReader();
+  return reader?.user?.id || null;
 }
 
 export async function GET(req: NextRequest) {
+  const denied = await rejectUnauthorizedRequest("GET");
+  if (denied) return denied;
   try {
     const userId = await currentUserId();
     if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -69,6 +70,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const denied = await rejectUnauthorizedRequest("POST");
+  if (denied) return denied;
   try {
     const userId = await currentUserId();
     if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });
@@ -95,6 +98,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const denied = await rejectUnauthorizedRequest("DELETE");
+  if (denied) return denied;
   try {
     const userId = await currentUserId();
     if (!userId) return NextResponse.json({ error: "未登录" }, { status: 401 });

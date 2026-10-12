@@ -1,3 +1,4 @@
+import { rejectUnauthorizedRequest } from "@/lib/auth";
 import { after, NextResponse } from "next/server";
 import { queueBookCoverFetch } from "@/lib/cover-fetcher";
 
@@ -5,6 +6,8 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const denied = await rejectUnauthorizedRequest("POST");
+  if (denied) return denied;
   const { id } = await params;
   const bookId = Number.parseInt(id, 10);
   if (!Number.isFinite(bookId)) {

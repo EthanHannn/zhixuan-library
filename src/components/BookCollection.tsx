@@ -1,5 +1,7 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-fetch";
+
 import { useCallback, useEffect, useState } from "react";
 import { BookCard } from "./BookCard";
 import type { BookSummary } from "@/types/catalog";
@@ -24,7 +26,7 @@ export function BookCollection({ title, eyebrow = "CURATED COLLECTION", descript
     if (author) params.set("author", author);
     if (tag) params.set("tag", tag);
     try {
-      const response = await fetch(`/api/books?${params}`);
+      const response = await apiFetch(`/api/books?${params}`);
       const data = await response.json();
       setBooks(data.books || []);
       setTotalPages(data.pagination?.totalPages || 1);

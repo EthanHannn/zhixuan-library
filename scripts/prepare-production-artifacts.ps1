@@ -31,18 +31,13 @@ function Assert-LastExitCode([string]$Action) {
 New-Item -ItemType Directory -Path $deployDir -Force | Out-Null
 
 if (-not (Test-Path -LiteralPath $productionEnvPath)) {
-  $secretBytes = New-Object byte[] 48
-  [Security.Cryptography.RandomNumberGenerator]::Fill($secretBytes)
-  $authSecret = [Convert]::ToBase64String($secretBytes)
   $productionEnv = @"
 DATABASE_URL=file:/app/data/library.db
 NOVEL_ROOT=/data/novels
 MIN_BOOK_SCORE=7.5
-NEXTAUTH_URL=https://library.aivideoart.cn
-NEXTAUTH_SECRET=$authSecret
-OWNER_USERNAME=codingCat
-OWNER_PASSWORD=Think24
-OWNER_NICKNAME=老板
+PORTAL_ALLOWED_USER=owner
+LIBRARY_PUBLIC_URL=https://library.private.xuexikuaile.fun
+PORTAL_AUTH_URL=https://auth.private.xuexikuaile.fun
 "@
   [IO.File]::WriteAllText($productionEnvPath, $productionEnv, [Text.UTF8Encoding]::new($false))
 }

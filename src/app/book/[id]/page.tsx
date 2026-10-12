@@ -1,9 +1,11 @@
 "use client";
 
+import { apiFetch } from "@/lib/api-fetch";
+
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useReader } from "@/app/providers";
 import { BookCover } from "@/components/BookCover";
 import { BookCard } from "@/components/BookCard";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -50,7 +52,7 @@ const voteTypes = [
 
 export default function BookDetailPage() {
   const { id } = useParams();
-  const { data: session } = useSession();
+  const { data: reader } = useReader();
   const [book, setBook] = useState<Book | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [recommendations, setRecommendations] = useState<BookSummary[]>([]);
@@ -64,7 +66,7 @@ export default function BookDetailPage() {
 
   const fetchBook = useCallback(async () => {
     try {
-      const response = await fetch(`/api/books/${id}`);
+      const response = await apiFetch(`/api/books/${id}`);
       const data = await response.json();
       setBook(data.book || null);
     } finally {
@@ -73,20 +75,20 @@ export default function BookDetailPage() {
   }, [id]);
 
   const fetchComments = useCallback(async () => {
-    const response = await fetch(`/api/comments?bookId=${id}`);
+    const response = await apiFetch(`/api/comments?bookId=${id}`);
     if (response.ok) setComments((await response.json()).comments || []);
   }, [id]);
 
   const fetchRecommendations = useCallback(async () => {
-    const response = await fetch(`/api/books/${id}/similar?limit=6`, { cache: "no-store" });
+    const response = await apiFetch(`/api/books/${id}/similar?limit=6`, { cache: "no-store" });
     if (response.ok) setRecommendations((await response.json()).books || []);
   }, [id]);
 
   const fetchPersonalState = useCallback(async () => {
     const [voteResponse, progressResponse, shelfResponse] = await Promise.all([
-      fetch(`/api/votes?bookId=${id}`),
-      fetch(`/api/books/${id}/progress`),
-      fetch(`/api/bookshelf?bookId=${id}`),
+      apiFetch(`/api/votes?bookId=${id}`),
+      apiFetch(`/api/books/${id}/progress`),
+      apiFetch(`/api/bookshelf?bookId=${id}`),
     ]);
     if (voteResponse.ok) setUserVote((await voteResponse.json()).vote?.type || null);
     if (progressResponse.ok) {
@@ -101,16 +103,16 @@ export default function BookDetailPage() {
     fetchBook();
     fetchComments();
     fetchRecommendations();
-    if (session) {
+    if (reader) {
       fetchPersonalState();
     }
-  }, [fetchBook, fetchComments, fetchPersonalState, fetchRecommendations, id, session]);
+  }, [fetchBook, fetchComments, fetchPersonalState, fetchRecommendations, id, reader]);
 
   const handleShelf = async () => {
-    if (!session || !book) return;
+    if (!reader || !book) return;
     setShelfLoading(true);
     try {
-      const response = await fetch(inBookshelf ? `/api/bookshelf?bookId=${book.id}` : "/api/bookshelf", {
+      const response = await apiFetch(inBookshelf ? `/api/bookshelf?bookId=${book.id}` : "/api/bookshelf", {
         method: inBookshelf ? "DELETE" : "POST",
         headers: inBookshelf ? undefined : { "Content-Type": "application/json" },
         body: inBookshelf ? undefined : JSON.stringify({ bookId: book.id }),
@@ -122,8 +124,8 @@ export default function BookDetailPage() {
   };
 
   const handleVote = async (type: string) => {
-    if (!session || userVote) return;
-    const response = await fetch("/api/votes", {
+    if (!reader || userVote) return;
+    const response = await apiFetch("/api/votes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bookId: Number(id), type }),
@@ -139,10 +141,10 @@ export default function BookDetailPage() {
 
   const handleComment = async (event: FormEvent) => {
     event.preventDefault();
-    if (!session || !newComment.trim()) return;
+    if (!reader || !newComment.trim()) return;
     setSubmitting(true);
     try {
-      const response = await fetch("/api/comments", {
+      const response = await apiFetch("/api/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bookId: Number(id), content: newComment }),
@@ -205,7 +207,7 @@ export default function BookDetailPage() {
 
             <section className="rounded-[1.75rem] border border-[#d9cfbf] bg-[#fffdf8] p-6 sm:p-8">
               <div className="flex items-end justify-between"><div><p className="text-xs font-semibold tracking-[0.25em] text-[#9b4b35]">DISCUSSION</p><h2 className="mt-2 font-serif text-2xl font-bold text-[#263e35]">书友评论</h2></div><span className="text-sm font-semibold text-[#70695f]">{book._count.comments} 条</span></div>
-              {session ? <form onSubmit={handleComment} className="mt-6"><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="写下你的阅读感受…" className="w-full resize-none rounded-xl border border-[#d6ccbc] bg-white p-4 font-medium leading-7 text-[#3d3933] outline-none placeholder:text-[#91897d] focus:border-[#315f50] focus:ring-4 focus:ring-[#315f50]/10" rows={4} maxLength={1000} /><div className="mt-2 flex items-center justify-between"><span className="text-xs font-medium text-[#80786d]">{newComment.length}/1000</span><button type="submit" disabled={submitting || !newComment.trim()} className="rounded-xl bg-[#315f50] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-45">{submitting ? "发送中…" : "发表评论"}</button></div></form> : <p className="mt-6 rounded-xl bg-[#f2eee6] p-4 text-center font-medium text-[#665f55]">登录后可以发表评论</p>}
+              {reader ? <form onSubmit={handleComment} className="mt-6"><textarea value={newComment} onChange={(event) => setNewComment(event.target.value)} placeholder="写下你的阅读感受…" className="w-full resize-none rounded-xl border border-[#d6ccbc] bg-white p-4 font-medium leading-7 text-[#3d3933] outline-none placeholder:text-[#91897d] focus:border-[#315f50] focus:ring-4 focus:ring-[#315f50]/10" rows={4} maxLength={1000} /><div className="mt-2 flex items-center justify-between"><span className="text-xs font-medium text-[#80786d]">{newComment.length}/1000</span><button type="submit" disabled={submitting || !newComment.trim()} className="rounded-xl bg-[#315f50] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-45">{submitting ? "发送中…" : "发表评论"}</button></div></form> : <p className="mt-6 rounded-xl bg-[#f2eee6] p-4 text-center font-medium text-[#665f55]">登录后可以发表评论</p>}
 
               <div className="mt-8 space-y-6">{comments.length === 0 ? <p className="py-8 text-center font-medium text-[#756e63]">还没有评论，读完来说两句吧。</p> : comments.map((comment) => <article key={comment.id} className="border-t border-[#e5ddd1] pt-6"><div className="flex gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#315f50] font-serif font-bold text-white">{(comment.user.nickname || comment.user.username).slice(0, 1)}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-3 gap-y-1"><span className="font-bold text-[#30483e]">{comment.user.nickname || comment.user.username}</span><time className="text-xs font-medium text-[#827a6f]">{new Date(comment.createdAt).toLocaleString("zh-CN")}</time></div><p className="mt-2 whitespace-pre-wrap font-medium leading-7 text-[#4c4841]">{comment.content}</p>{comment.replies?.length > 0 && <div className="mt-4 space-y-3 border-l-2 border-[#d9d0c2] pl-4">{comment.replies.map((reply) => <div key={reply.id}><p className="text-sm font-bold text-[#30483e]">{reply.user.nickname || reply.user.username}</p><p className="mt-1 text-sm font-medium leading-6 text-[#575149]">{reply.content}</p></div>)}</div>}</div></div></article>)}</div>
             </section>
@@ -220,7 +222,7 @@ export default function BookDetailPage() {
             <section className="rounded-[1.75rem] border border-[#d9cfbf] bg-[#fffdf8] p-6">
               <h2 className="font-serif text-xl font-bold text-[#263e35]">{userVote ? "我的评价" : "这本书怎么样？"}</h2>
               <p className="mt-2 text-sm font-medium leading-6 text-[#6c655b]">每个账号对一本书只能评价一次。</p>
-              <div className="mt-5 space-y-2">{voteTypes.map((vote) => <button key={vote.type} onClick={() => handleVote(vote.type)} disabled={!session || !!userVote} className={`flex w-full items-center rounded-xl border px-3 py-2.5 text-left transition ${userVote === vote.type ? "border-[#315f50] bg-[#315f50] text-white" : userVote ? "border-[#e2dbd0] bg-[#f3efe8] text-[#9a9388]" : "border-[#d8cfc0] bg-white text-[#48443e] hover:border-[#315f50] hover:bg-[#f0f4f1]"}`}><span className="mr-3 text-lg">{vote.emoji}</span><span><b className="block text-sm">{vote.label}</b><small className={`text-xs font-medium ${userVote === vote.type ? "text-white/70" : "text-[#777065]"}`}>{vote.description}</small></span></button>)}</div>
+              <div className="mt-5 space-y-2">{voteTypes.map((vote) => <button key={vote.type} onClick={() => handleVote(vote.type)} disabled={!reader || !!userVote} className={`flex w-full items-center rounded-xl border px-3 py-2.5 text-left transition ${userVote === vote.type ? "border-[#315f50] bg-[#315f50] text-white" : userVote ? "border-[#e2dbd0] bg-[#f3efe8] text-[#9a9388]" : "border-[#d8cfc0] bg-white text-[#48443e] hover:border-[#315f50] hover:bg-[#f0f4f1]"}`}><span className="mr-3 text-lg">{vote.emoji}</span><span><b className="block text-sm">{vote.label}</b><small className={`text-xs font-medium ${userVote === vote.type ? "text-white/70" : "text-[#777065]"}`}>{vote.description}</small></span></button>)}</div>
               <p className="mt-5 rounded-xl bg-[#f2eee6] p-3 text-xs font-medium leading-5 text-[#6d655a]">评价只写入当前这套私人书库的数据库，不会同步到知轩原站或其他人的部署；已经入库的高分作品不会因少量本地评价被自动移出。</p>
             </section>
           </aside>

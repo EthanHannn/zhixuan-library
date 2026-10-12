@@ -1,8 +1,11 @@
+import { rejectUnauthorizedRequest } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { MIN_BOOK_SCORE } from "@/lib/catalog";
 
 export async function GET() {
+  const denied = await rejectUnauthorizedRequest("GET");
+  if (denied) return denied;
   try {
     const where = { status: "APPROVED", hasContent: true, score: { gte: MIN_BOOK_SCORE } };
     const [groups, subGroups, books, authors, wordStats] = await Promise.all([

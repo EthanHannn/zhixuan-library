@@ -4,7 +4,7 @@
 
 ## 功能特性
 
-- ✅ 用户注册/登录系统(用户名+密码)
+- ✅ 门户统一登录（nginx + Authelia，书屋无独立密码）
 - ✅ 书籍列表展示与搜索(封面墙,支持"只看有正文"筛选)
 - ✅ 书籍详情页(封面、简介、评分、**开始阅读**、**查看原站**)
 - ✅ **本地小说在线阅读**(`/read/[id]`):章节目录、上下章、字号调节、六套阅读配色、可关闭的彩色正文、键盘翻页、阅读进度记忆(本地 + 云端同步)
@@ -12,23 +12,28 @@
 - ✅ 投票功能(仙草/粮草/干草/枯草/毒草)
 - ✅ 评论系统(支持回复)
 - ✅ 提交新书 / 管理员审核
-- ✅ 私有书房权限:除登录与认证接口外,页面、API 和封面均需登录
+- ✅ 私有书房权限:页面、API、封面和图片优化均由门户认证保护，容器内部健康检查保留
 - ✅ 作者作品聚合、动态分类书架与真实封面元数据
 
-## 私有访问与初始账号
+## 私有访问与默认读者
 
-本站默认作为私人书房运行,没有公开注册入口。初始管理员由幂等脚本创建:
+书屋只接受受信任 nginx 转发的 `Remote-User`，必须匹配 `PORTAL_ALLOWED_USER`。配置 `LIBRARY_PUBLIC_URL` 和 `PORTAL_AUTH_URL` 为完整 HTTPS 地址；缺少配置或身份即拒绝访问，不提供开发认证绕过。
+
+nginx 配置由相邻 personal-portal 项目生成；仅发布 `127.0.0.1:6870`。门户登录成功后可直接阅读，退出前往统一认证页。旧 `/login` 和 `/register` 固定返回首页，旧 `/api/auth/*` 退役。
 
 ```bash
-npm run seed:owner
+npm run seed:reader
 ```
 
-- 初始用户名:`codingCat`
-- 初始密码:`Think24`
-- 昵称:`老板`
-- 角色:`ADMIN`
+此脚本幂等移除用户表的旧密码列，创建 `default-reader` 作为书架、进度、评论和投票的归属。它不会导入旧用户关系，不重建书籍和章节。生产启动时自动执行，执行失败则不启动服务；部署前须一致性备份数据库。
 
-生产部署前应通过 `OWNER_USERNAME`、`OWNER_PASSWORD` 和 `OWNER_NICKNAME` 覆盖默认值,并设置随机的 `NEXTAUTH_SECRET`。重复执行种子不会重置已有密码;只有显式执行 `npm run seed:owner -- --reset-password` 才会覆盖密码。
+```bash
+npm run test:policy
+npm run build
+npm run test:auth
+```
+
+`test:auth` 使用系统临时目录中的独立数据库、样本正文和回环端口 16870，不读取生产书库。可设置 `AUTH_TEST_IMAGE` 验证构建后的 Docker 镜像。
 
 ## 本地正文导入
 
@@ -108,8 +113,9 @@ cp .env.example .env
 DATABASE_URL="file:./dev.db"
 
 # NextAuth 配置
-NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-key-here"
+PORTAL_ALLOWED_USER="owner"
+LIBRARY_PUBLIC_URL="https://library.private.example.test"
+PORTAL_AUTH_URL="https://auth.private.example.test"
 
 # 本地已解压的小说根目录（推荐使用正斜杠，便于跨平台配置）
 NOVEL_ROOT="E:/path/to/novels"

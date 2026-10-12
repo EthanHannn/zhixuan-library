@@ -67,3 +67,6 @@ prisma/dev.db-journal
 
 # logs
 *.log
+
+# Isolated authentication fixtures
+.local/

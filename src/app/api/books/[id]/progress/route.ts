@@ -1,6 +1,5 @@
+import { getCurrentReader, rejectUnauthorizedRequest } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { MIN_BOOK_SCORE } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
 
@@ -9,9 +8,11 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await rejectUnauthorizedRequest("GET");
+  if (denied) return denied;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const reader = await getCurrentReader();
+    if (!reader?.user) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
     const { id } = await params;
@@ -19,7 +20,7 @@ export async function GET(
     if (isNaN(bookId)) {
       return NextResponse.json({ error: "无效的书籍ID" }, { status: 400 });
     }
-    const userId = session.user.id;
+    const userId = reader.user.id;
 
     const progress = await prisma.readingProgress.findUnique({
       where: { userId_bookId: { userId, bookId } },
@@ -37,9 +38,11 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await rejectUnauthorizedRequest("POST");
+  if (denied) return denied;
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
+    const reader = await getCurrentReader();
+    if (!reader?.user) {
       return NextResponse.json({ error: "未登录" }, { status: 401 });
     }
     const { id } = await params;
@@ -60,7 +63,7 @@ export async function POST(
     const requestedChapterIdx = Math.max(1, parseInt(body.chapterIdx) || 1);
     const chapterIdx = Math.min(requestedChapterIdx, Math.max(1, book.chapterCount));
 
-    const userId = session.user.id;
+    const userId = reader.user.id;
     const progress = await prisma.readingProgress.upsert({
       where: { userId_bookId: { userId, bookId } },
       update: { chapterIdx, percent },
